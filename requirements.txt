@@ -3,3 +3,8 @@ SQLAlchemy
 python-dotenv
 requests
 aiofiles
+aiogram
+python-dotenv
+aiofiles
+aiosqlite
+requests
