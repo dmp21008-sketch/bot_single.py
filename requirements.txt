@@ -1,5 +1,10 @@
-python-telegram-bot==20.7
+python-telegram-bot
 SQLAlchemy
 python-dotenv
 requests
 aiofiles
+aiogram
+python-dotenv
+aiofiles
+aiosqlite
+requests
