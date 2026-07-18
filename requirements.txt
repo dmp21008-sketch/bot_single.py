@@ -1,10 +1,5 @@
-python-telegram-bot
-SQLAlchemy
-python-dotenv
-requests
-aiofiles
-aiogram
-python-dotenv
-aiofiles
-aiosqlite
-requests
+aiogram==3.13.1
+SQLAlchemy==2.0.36
+aiosqlite==0.20.0
+aiofiles==24.1.0
+aiohttp
