@@ -1,11 +1,11 @@
 # ═══════════════════════════════════════════════════════════════
-#  BOT LIÊN QUÂN - 1 FILE DUY NHẤT
-#  Cài thư viện: pip install aiogram==3.13.1 sqlalchemy==2.0.36 aiosqlite==0.20.0 aiofiles==24.1.0
+#  BOT LIÊN QUÂN - ĐÃ FIX LỖI TIMEOUT RENDER WEB SERVICE
+#  Cài thư viện: pip install aiogram==3.13.1 sqlalchemy==2.0.36 aiosqlite==0.20.0 aiofiles==24.1.0 aiohttp
 #  Chạy: python bot_single.py
 # ═══════════════════════════════════════════════════════════════
 
 # ── SỬA 2 DÒNG NÀY TRƯỚC KHI CHẠY ──────────────────────────────
-BOT_TOKEN = "8374524579:AAE2pvVgQqOFnEN2hnhhfRUyopi1B8Dhxcc"
+BOT_TOKEN = "NHAP_BOT_TOKEN_CUA_BAN_VAO_DAY"
 ADMIN_IDS = [7936179657]  # Telegram ID của admin
 # ────────────────────────────────────────────────────────────────
 
@@ -20,6 +20,7 @@ from datetime import datetime
 from typing import Any, Awaitable, Callable
 
 import aiofiles
+from aiohttp import web  # Thêm thư viện mở cổng Web cho Render
 from aiogram import BaseMiddleware, Bot, Dispatcher, F, Router
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
@@ -1376,6 +1377,24 @@ async def admin_export_sold(message: Message, is_admin: bool):
     )
 
 
+# ── Hàm chạy Web Server mồi cho Render ──────────────────────────────────────────
+
+
+async def handle_web(request):
+    return web.Response(text="Bot đang chạy mượt mà!")
+
+
+async def start_web_server():
+    app = web.Application()
+    app.router.add_get("/", handle_web)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    port = int(os.environ.get("PORT", 8080))  # Lấy cổng Render cấp
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+    logger.info(f"✅ Web Server mồi đang chạy tại port {port}")
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 
@@ -1387,6 +1406,9 @@ async def main():
         sys.exit(1)
 
     await init_db()
+
+    # Bắt đầu chạy song song Web Server cùng lúc với Bot Telegram
+    await start_web_server()
 
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
     dp = Dispatcher(storage=MemoryStorage())
