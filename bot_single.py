@@ -5,7 +5,7 @@
 # ═══════════════════════════════════════════════════════════════
 
 # ── SỬA 2 DÒNG NÀY TRƯỚC KHI CHẠY ──────────────────────────────
-BOT_TOKEN = "8987070276:AAEmwKfJ4_pkD06mFjBklG5UZ-bpKgELD6I"
+BOT_TOKEN = "8374524579:AAE2pvVgQqOFnEN2hnhhfRUyopi1B8Dhxcc"
 ADMIN_IDS = [7936179657]  # Telegram ID của admin
 # ────────────────────────────────────────────────────────────────
 
