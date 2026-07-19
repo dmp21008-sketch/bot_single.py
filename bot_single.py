@@ -3,8 +3,8 @@
 #  Cài thư viện: pip install aiogram==3.13.1 sqlalchemy==2.0.36 aiosqlite==0.20.0 aiofiles==24.1.0 aiohttp
 # ═══════════════════════════════════════════════════════════════
 
-BOT_TOKEN = "8374524579:AAF6CpmmHi0RKYtQ5dJ0bIw9e_wBonjF1nY"  #[span_4](start_span)[span_4](end_span)
-ADMIN_IDS = [7936179657]  # ID Telegram Admin[span_5](start_span)[span_5](end_span)
+BOT_TOKEN = "8374524579:AAF6CpmmHi0RKYtQ5dJ0bIw9e_wBonjF1nY"  
+ADMIN_IDS = [7936179657]  # ID Telegram Admin
 
 import asyncio
 import enum
@@ -17,7 +17,7 @@ import random
 from datetime import datetime, timedelta
 
 import aiofiles
-from aiohttp import web  #[span_6](start_span)[span_6](end_span)
+from aiohttp import web  
 from aiogram import BaseMiddleware, Bot, Dispatcher, F, Router
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
@@ -30,6 +30,7 @@ from aiogram.types import (
     FSInputFile,
     KeyboardButton,
     Message,
+    InlineKeyboardButton,
 )
 from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
 from sqlalchemy import (
@@ -54,20 +55,18 @@ from sqlalchemy.orm import (
 )
 
 # ── Cấu hình Shop & Tài Xỉu ───────────────────────────────────────────────────
-ACCOUNT_PRICE = 300  # VNĐ mỗi acc[span_7](start_span)[span_7](end_span)
-MIN_ORDER_QTY = 50  # Số lượng tối thiểu[span_8](start_span)[span_8](end_span)
-CHECKER_LINK = "t.me/tretrauchecker_bot?start=_tgr_8UulJtkyZjE1"  #[span_9](start_span)[span_9](end_span)
-XU_DIEMDANH = 500  # Số xu nhận được khi điểm danh[span_10](start_span)[span_10](end_span)
+ACCOUNT_PRICE = 300  # VNĐ mỗi acc
+MIN_ORDER_QTY = 50  # Số lượng tối thiểu
+CHECKER_LINK = "t.me/tretrauchecker_bot?start=_tgr_8UulJtkyZjE1"  
+XU_DIEMDANH = 500  # Số xu nhận được khi điểm danh
 THUONG_REF_XU = 5000  # Thưởng mời bạn bè chơi bot
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))  #[span_11](start_span)[span_11](end_span)
-UPLOADS_DIR = os.path.join(BASE_DIR, "uploads")  #[span_12](start_span)[span_12](end_span)
-EXPORTS_DIR = os.path.join(BASE_DIR, "exports")  #[span_13](start_span)[span_13](end_span)
-LOGS_DIR = os.path.join(BASE_DIR, "logs")  #[span_14](start_span)[span_14](end_span)
-QR_IMAGE_PATH = os.path.join(UPLOADS_DIR, "qr_current.jpg")  #[span_15](start_span)[span_15](end_span)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))  
+UPLOADS_DIR = os.path.join(BASE_DIR, "uploads")  
+EXPORTS_DIR = os.path.join(BASE_DIR, "exports")  
+LOGS_DIR = os.path.join(BASE_DIR, "logs")  
+QR_IMAGE_PATH = os.path.join(UPLOADS_DIR, "qr_current.jpg")  
 DATABASE_URL = "postgresql+asyncpg://neondb_owner:npg_LF6COm8Ruikq@ep-sweet-moon-auyjhn8e-pooler.c-10.us-east-1.aws.neon.tech/neondb?ssl=require"
-
-  #[span_16](start_span)[span_16](end_span)
 
 MENU_BUTTONS = {
     "🏠 Trang Chủ", "🛒 Mua Acc", "💳 Nạp Tiền", "👤 Tài Khoản", "📦 Đơn Hàng", "☎ Hỗ Trợ",
@@ -76,12 +75,12 @@ MENU_BUTTONS = {
     "🪙 Cộng Xu", "🪙 Trừ Xu", "📷 Đổi QR", "📥 Bill Chờ", "📢 Broadcast", "🚫 Ban User", 
     "✅ Unban User", "🗑 Xóa Account", "📤 Export Chưa Bán", "📤 Export Đã Bán", "🔙 Menu Chính",
     "🎫 Tạo Code", "🎫 Danh Sách Code"
-}  #[span_17](start_span)[span_17](end_span)
+}  
 
 # ── Logging ───────────────────────────────────────────────────────────────────
-os.makedirs(LOGS_DIR, exist_ok=True)  #[span_18](start_span)[span_18](end_span)
-os.makedirs(UPLOADS_DIR, exist_ok=True)  #[span_19](start_span)[span_19](end_span)
-os.makedirs(EXPORTS_DIR, exist_ok=True)  #[span_20](start_span)[span_20](end_span)
+os.makedirs(LOGS_DIR, exist_ok=True)  
+os.makedirs(UPLOADS_DIR, exist_ok=True)  
+os.makedirs(EXPORTS_DIR, exist_ok=True)  
 
 logging.basicConfig(
     level=logging.INFO,
@@ -90,81 +89,95 @@ logging.basicConfig(
         logging.StreamHandler(sys.stdout),
         logging.FileHandler(os.path.join(LOGS_DIR, "bot.log"), encoding="utf-8"),
     ],
-)  #[span_21](start_span)[span_21](end_span)
-logger = logging.getLogger(__name__)  #[span_22](start_span)[span_22](end_span)
+)  
+logger = logging.getLogger(__name__)  
 
 # ── Database ──────────────────────────────────────────────────────────────────
-engine = create_async_engine(DATABASE_URL, echo=False)  #[span_23](start_span)[span_23](end_span)
-AsyncSessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)  #[span_24](start_span)[span_24](end_span)
+engine = create_async_engine(DATABASE_URL, echo=False)  
+AsyncSessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)  
 
-class Base(DeclarativeBase):  #[span_25](start_span)[span_25](end_span)
+class Base(DeclarativeBase):  
     pass
 
-class AccountStatus(str, enum.Enum):  #[span_26](start_span)[span_26](end_span)
+class AccountStatus(str, enum.Enum):  
     available = "available"
     sold = "sold"
 
-class OrderStatus(str, enum.Enum):  #[span_27](start_span)[span_27](end_span)
+class OrderStatus(str, enum.Enum):  
     completed = "completed"
     cancelled = "cancelled"
 
-class DepositStatus(str, enum.Enum):  #[span_28](start_span)[span_28](end_span)
+class DepositStatus(str, enum.Enum):  
     pending = "pending"
     approved = "approved"
     rejected = "rejected"
 
 # ── Models ────────────────────────────────────────────────────────────────────
-class User(Base):  #[span_29](start_span)[span_29](end_span)
+class User(Base):  
     __tablename__ = "users"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)  #[span_30](start_span)[span_30](end_span)
-    telegram_id: Mapped[int] = mapped_column(BigInteger, unique=True, nullable=False, index=True)  #[span_31](start_span)[span_31](end_span)
-    username: Mapped[str | None] = mapped_column(String(255), nullable=True)  #[span_32](start_span)[span_32](end_span)
-    fullname: Mapped[str] = mapped_column(String(255), nullable=False, default="")  #[span_33](start_span)[span_33](end_span)
-    balance: Mapped[int] = mapped_column(Integer, nullable=False, default=0)  # Ví VNĐ mua acc[span_34](start_span)[span_34](end_span)
-    xu: Mapped[int] = mapped_column(Integer, nullable=False, default=100)  # Ví Xu tài xỉu[span_35](start_span)[span_35](end_span)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)  
+    telegram_id: Mapped[int] = mapped_column(BigInteger, unique=True, nullable=False, index=True)  
+    username: Mapped[str | None] = mapped_column(String(255), nullable=True)  
+    fullname: Mapped[str] = mapped_column(String(255), nullable=False, default="")  
+    balance: Mapped[int] = mapped_column(Integer, nullable=False, default=0)  # Ví VNĐ mua acc
+    xu: Mapped[int] = mapped_column(Integer, nullable=False, default=100)  # Ví Xu tài xỉu
     last_diemdanh: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)  # Chống spam điểm danh
     referred_by: Mapped[int | None] = mapped_column(BigInteger, nullable=True)  # ID người mời
     total_ref: Mapped[int] = mapped_column(Integer, nullable=False, default=0)  # Tổng số người đã mời
-    is_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)  #[span_36](start_span)[span_36](end_span)
-    is_banned: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)  #[span_37](start_span)[span_37](end_span)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())  #[span_38](start_span)[span_38](end_span)
-    orders: Mapped[list["Order"]] = relationship("Order", back_populates="user")  #[span_39](start_span)[span_39](end_span)
-    deposits: Mapped[list["Deposit"]] = relationship("Deposit", back_populates="user")  #[span_40](start_span)[span_40](end_span)
+    is_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)  
+    is_banned: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)  
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())  
+    orders: Mapped[list["Order"]] = relationship("Order", back_populates="user")  
+    deposits: Mapped[list["Deposit"]] = relationship("Deposit", back_populates="user")  
 
-class Account(Base):  #[span_41](start_span)[span_41](end_span)
+class Account(Base):  
     __tablename__ = "accounts"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)  #[span_42](start_span)[span_42](end_span)
-    username: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)  #[span_43](start_span)[span_43](end_span)
-    password: Mapped[str] = mapped_column(String(255), nullable=False)  #[span_44](start_span)[span_44](end_span)
-    status: Mapped[AccountStatus] = mapped_column(Enum(AccountStatus), nullable=False, default=AccountStatus.available)  #[span_45](start_span)[span_45](end_span)
-    order_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("orders.id"), nullable=True)  #[span_46](start_span)[span_46](end_span)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())  #[span_47](start_span)[span_47](end_span)
-    sold_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)  #[span_48](start_span)[span_48](end_span)
-    order: Mapped["Order|None"] = relationship("Order", back_populates="accounts")  #[span_49](start_span)[span_49](end_span)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)  
+    username: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)  
+    password: Mapped[str] = mapped_column(String(255), nullable=False)  
+    status: Mapped[AccountStatus] = mapped_column(Enum(AccountStatus), nullable=False, default=AccountStatus.available)  
+    order_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("orders.id"), nullable=True)  
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())  
+    sold_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)  
+    order: Mapped["Order|None"] = relationship("Order", back_populates="accounts")  
+    
+    # Các cột bổ sung phục vụ cho chuẩn hóa Import
+    uid: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    region: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    country: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    so: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    sdt: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    fb: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    ban: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    rank: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    skin: Mapped[str | None] = mapped_column(Text, nullable=True)
+    tuong: Mapped[str | None] = mapped_column(Text, nullable=True)
+    tinh_trang: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
-class Order(Base):  #[span_50](start_span)[span_50](end_span)
+class Order(Base):  
     __tablename__ = "orders"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)  #[span_51](start_span)[span_51](end_span)
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)  #[span_52](start_span)[span_52](end_span)
-    quantity: Mapped[int] = mapped_column(Integer, nullable=False)  #[span_53](start_span)[span_53](end_span)
-    price: Mapped[int] = mapped_column(Integer, nullable=False)  #[span_54](start_span)[span_54](end_span)
-    status: Mapped[OrderStatus] = mapped_column(Enum(OrderStatus), nullable=False, default=OrderStatus.completed)  #[span_55](start_span)[span_55](end_span)
-    file_name: Mapped[str | None] = mapped_column(String(255), nullable=True)  #[span_56](start_span)[span_56](end_span)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())  #[span_57](start_span)[span_57](end_span)
-    user: Mapped["User"] = relationship("User", back_populates="orders")  #[span_58](start_span)[span_58](end_span)
-    accounts: Mapped[list["Account"]] = relationship("Account", back_populates="order")  #[span_59](start_span)[span_59](end_span)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)  
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)  
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)  
+    price: Mapped[int] = mapped_column(Integer, nullable=False)  
+    status: Mapped[OrderStatus] = mapped_column(Enum(OrderStatus), nullable=False, default=OrderStatus.completed)  
+    file_name: Mapped[str | None] = mapped_column(String(255), nullable=True)  
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())  
+    user: Mapped["User"] = relationship("User", back_populates="orders")  
+    accounts: Mapped[list["Account"]] = relationship("Account", back_populates="order")  
 
-class Deposit(Base):  #[span_60](start_span)[span_60](end_span)
+class Deposit(Base):  
     __tablename__ = "deposits"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)  #[span_61](start_span)[span_61](end_span)
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)  #[span_62](start_span)[span_62](end_span)
-    amount: Mapped[int] = mapped_column(Integer, nullable=False)  #[span_63](start_span)[span_63](end_span)
-    bill_image: Mapped[str | None] = mapped_column(String(512), nullable=True)  #[span_64](start_span)[span_64](end_span)
-    status: Mapped[DepositStatus] = mapped_column(Enum(DepositStatus), nullable=False, default=DepositStatus.pending)  #[span_65](start_span)[span_65](end_span)
-    admin_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)  #[span_66](start_span)[span_66](end_span)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())  #[span_67](start_span)[span_67](end_span)
-    approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)  #[span_68](start_span)[span_68](end_span)
-    user: Mapped["User"] = relationship("User", back_populates="deposits")  #[span_69](start_span)[span_69](end_span)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)  
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)  
+    amount: Mapped[int] = mapped_column(Integer, nullable=False)  
+    bill_image: Mapped[str | None] = mapped_column(String(512), nullable=True)  
+    status: Mapped[DepositStatus] = mapped_column(Enum(DepositStatus), nullable=False, default=DepositStatus.pending)  
+    admin_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)  
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())  
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)  
+    user: Mapped["User"] = relationship("User", back_populates="deposits")  
 
 class Giftcode(Base):
     __tablename__ = "giftcodes"
@@ -173,54 +186,54 @@ class Giftcode(Base):
     xu: Mapped[int] = mapped_column(Integer, nullable=False)
     max_uses: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     used_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    used_by: Mapped[str | None] = mapped_column(Text, nullable=True, default="") # Chuỗi ID cách nhau bằng dấu phẩy
+    used_by: Mapped[str | None] = mapped_column(Text, nullable=True, default="") 
 
 async def init_db() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    logger.info("Database initialized")  #[span_70](start_span)[span_70](end_span)
+    logger.info("Database initialized")  
 
 # ── Services ──────────────────────────────────────────────────────────────────
 async def get_or_create_user(session, telegram_id, username, fullname, is_admin=False):
-    result = await session.execute(select(User).where(User.telegram_id == telegram_id))  #[span_71](start_span)[span_71](end_span)
-    user = result.scalar_one_or_none()  #[span_72](start_span)[span_72](end_span)
+    result = await session.execute(select(User).where(User.telegram_id == telegram_id))  
+    user = result.scalar_one_or_none()  
     if user is None:
-        user = User(telegram_id=telegram_id, username=username, fullname=fullname, is_admin=is_admin)  #[span_73](start_span)[span_73](end_span)
-        session.add(user)  #[span_74](start_span)[span_74](end_span)
-        await session.commit()  #[span_75](start_span)[span_75](end_span)
-        await session.refresh(user)  #[span_76](start_span)[span_76](end_span)
+        user = User(telegram_id=telegram_id, username=username, fullname=fullname, is_admin=is_admin)  
+        session.add(user)  
+        await session.commit()  
+        await session.refresh(user)  
     else:
         changed = False
-        if user.username != username: user.username = username; changed = True  #[span_77](start_span)[span_77](end_span)
-        if user.fullname != fullname: user.fullname = fullname; changed = True  #[span_78](start_span)[span_78](end_span)
+        if user.username != username: user.username = username; changed = True  
+        if user.fullname != fullname: user.fullname = fullname; changed = True  
         if changed:
-            await session.commit()  #[span_79](start_span)[span_79](end_span)
-            await session.refresh(user)  #[span_80](start_span)[span_80](end_span)
+            await session.commit()  
+            await session.refresh(user)  
     return user
 
 async def get_user_by_telegram_id(session, telegram_id):
-    r = await session.execute(select(User).where(User.telegram_id == telegram_id))  #[span_81](start_span)[span_81](end_span)
-    return r.scalar_one_or_none()  #[span_82](start_span)[span_82](end_span)
+    r = await session.execute(select(User).where(User.telegram_id == telegram_id))  
+    return r.scalar_one_or_none()  
 
 async def get_user_by_id(session, user_id):
-    r = await session.execute(select(User).where(User.id == user_id))  #[span_83](start_span)[span_83](end_span)
-    return r.scalar_one_or_none()  #[span_84](start_span)[span_84](end_span)
+    r = await session.execute(select(User).where(User.id == user_id))  
+    return r.scalar_one_or_none()  
 
 async def add_balance(session, user_id, amount):
-    user = await get_user_by_id(session, user_id)  #[span_85](start_span)[span_85](end_span)
+    user = await get_user_by_id(session, user_id)  
     if user is None: return None
-    user.balance += amount  #[span_86](start_span)[span_86](end_span)
-    await session.commit()  #[span_87](start_span)[span_87](end_span)
-    await session.refresh(user)  #[span_88](start_span)[span_88](end_span)
+    user.balance += amount  
+    await session.commit()  
+    await session.refresh(user)  
     return user
 
 async def adjust_balance_by_telegram_id(session, telegram_id, amount):
-    user = await get_user_by_telegram_id(session, telegram_id)  #[span_89](start_span)[span_89](end_span)
+    user = await get_user_by_telegram_id(session, telegram_id)  
     if user is None: return None
-    user.balance += amount  #[span_90](start_span)[span_90](end_span)
-    if user.balance < 0: user.balance = 0  #[span_91](start_span)[span_91](end_span)
-    await session.commit()  #[span_92](start_span)[span_92](end_span)
-    await session.refresh(user)  #[span_93](start_span)[span_93](end_span)
+    user.balance += amount  
+    if user.balance < 0: user.balance = 0  
+    await session.commit()  
+    await session.refresh(user)  
     return user
 
 async def adjust_xu_by_telegram_id(session, telegram_id, amount):
@@ -233,257 +246,272 @@ async def adjust_xu_by_telegram_id(session, telegram_id, amount):
     return user
 
 async def ban_user(session, telegram_id):
-    r = await session.execute(select(User).where(User.telegram_id == telegram_id))  #[span_94](start_span)[span_94](end_span)
-    user = r.scalar_one_or_none()  #[span_95](start_span)[span_95](end_span)
+    r = await session.execute(select(User).where(User.telegram_id == telegram_id))  
+    user = r.scalar_one_or_none()  
     if user is None: return False
-    user.is_banned = True  #[span_96](start_span)[span_96](end_span)
-    await session.commit()  #[span_97](start_span)[span_97](end_span)
+    user.is_banned = True  
+    await session.commit()  
     return True
 
 async def unban_user(session, telegram_id):
-    r = await session.execute(select(User).where(User.telegram_id == telegram_id))  #[span_98](start_span)[span_98](end_span)
-    user = r.scalar_one_or_none()  #[span_99](start_span)[span_99](end_span)
+    r = await session.execute(select(User).where(User.telegram_id == telegram_id))  
+    user = r.scalar_one_or_none()  
     if user is None: return False
-    user.is_banned = False  #[span_100](start_span)[span_100](end_span)
-    await session.commit()  #[span_101](start_span)[span_101](end_span)
+    user.is_banned = False  
+    await session.commit()  
     return True
 
 async def get_all_users(session):
-    r = await session.execute(select(User)); return list(r.scalars().all())  #[span_102](start_span)[span_102](end_span)
+    r = await session.execute(select(User)); return list(r.scalars().all())  
 
 async def get_available_count(session):
-    r = await session.execute(select(func.count()).where(Account.status == AccountStatus.available)); return r.scalar_one()  #[span_103](start_span)[span_103](end_span)
+    r = await session.execute(select(func.count()).where(Account.status == AccountStatus.available)); return r.scalar_one()  
 
 async def get_sold_count(session):
-    r = await session.execute(select(func.count()).where(Account.status == AccountStatus.sold)); return r.scalar_one()  #[span_104](start_span)[span_104](end_span)
+    r = await session.execute(select(func.count()).where(Account.status == AccountStatus.sold)); return r.scalar_one()  
 
 async def get_total_count(session):
-    r = await session.execute(select(func.count()).select_from(Account)); return r.scalar_one()  #[span_105](start_span)[span_105](end_span)
+    r = await session.execute(select(func.count()).select_from(Account)); return r.scalar_one()  
 
 async def pick_random_accounts(session, quantity):
     r = await session.execute(select(Account).where(Account.status == AccountStatus.available).with_for_update().limit(quantity))
     return list(r.scalars().all())
 
 async def mark_accounts_sold(session, accounts, order_id):
-    now = datetime.utcnow()  #[span_106](start_span)[span_106](end_span)
+    now = datetime.utcnow()  
     for acc in accounts:
-        acc.status = AccountStatus.sold  #[span_107](start_span)[span_107](end_span)
-        acc.order_id = order_id  #[span_108](start_span)[span_108](end_span)
-        acc.sold_at = now  #[span_109](start_span)[span_109](end_span)
-    await session.commit()  #[span_110](start_span)[span_110](end_span)
+        acc.status = AccountStatus.sold  
+        acc.order_id = order_id  
+        acc.sold_at = now  
+    await session.commit()  
 
+# ── Hàm Import Đã Được Sửa Lỗi Thụt Lề Hoàn Chỉnh ──────────────────────────────
 async def import_accounts(session, lines):
-    stats = {"total": 0, "imported": 0, "duplicates": 0, "invalid": 0}  #[span_111](start_span)[span_111](end_span)
+    stats = {"total": 0, "imported": 0, "duplicates": 0, "invalid": 0}
     
-    # Tối ưu hóa quét bộ nhớ set tránh treo database
     r_all = await session.execute(select(Account.username))
     existing_unames = set(r_all.scalars().all())
+    
     for raw in lines:
-    
-    # Bước 1: Tách tài khoản và mật khẩu trước dấu gạch đứng đầu tiên
-    parts = raw.split(" | ")
-    account_pass = parts[0].split(":")
-    username = account_pass[0].strip()
-    password = account_pass[1].strip() if len(account_pass) > 1 else ""
-    
-    # Bước 2: Tạo một danh sách từ điển để bốc các giá trị sau dấu "="
-    data_map = {}
-    for part in parts[1:]:
-        if "=" in part:
-            key, val = part.split("=", 1)
-            data_map[key.strip().lower()] = val.strip()
+        raw = raw.strip()
+        if not raw:
+            continue
+        stats["total"] += 1
+            
+        parts = raw.split(" | ")
+        account_pass = parts[0].split(":")
+        
+        if len(account_pass) < 2:
+            stats["invalid"] += 1
+            continue
+            
+        username = account_pass[0].strip()
+        password = account_pass[1].strip()
+        
+        if username in existing_unames:
+            stats["duplicates"] += 1
+            continue
+        
+        data_map = {}
+        for part in parts[1:]:
+            if "=" in part:
+                key, val = part.split("=", 1)
+                data_map[key.strip().lower()] = val.strip()
 
-    # Bước 3: Đưa dữ liệu chuẩn hóa vào Model Database của bác
-    # Ép kiểu dữ liệu về dạng chữ (String) hoặc Số (Integer) tương ứng để Neon không bắt lỗi
-    new_account = Account(
-        username=username,
-        password=password,
-        uid=int(data_map.get("uid", 0)) if data_map.get("uid", "").isdigit() else None,
-        region=data_map.get("region"),
-        country=data_map.get("country"),
-        so=data_map.get("sò"),
-        email=data_map.get("email"),
-        sdt=data_map.get("sđt"),
-        fb=data_map.get("fb"),
-        ban=data_map.get("ban"),
-        rank=data_map.get("rank"),
-        skin=data_map.get("skin"),
-        tuong=data_map.get("tướng"),
-        tinh_trang=data_map.get("tình trạng")
-    )
-    # Lệnh session.add(new_account) phía dưới của bác...
+        new_account = Account(
+            username=username,
+            password=password,
+            uid=int(data_map.get("uid", 0)) if data_map.get("uid", "").isdigit() else None,
+            region=data_map.get("region"),
+            country=data_map.get("country"),
+            so=data_map.get("sò"),
+            email=data_map.get("email"),
+            sdt=data_map.get("sđt"),
+            fb=data_map.get("fb"),
+            ban=data_map.get("ban"),
+            rank=data_map.get("rank"),
+            skin=data_map.get("skin"),
+            tuong=data_map.get("tướng"),
+            tinh_trang=data_map.get("tình trạng")
+        )
+        
+        session.add(new_account)
+        existing_unames.add(username)
+        stats["imported"] += 1
 
+    await session.commit()
+    return stats
 
 async def get_unsold_accounts(session):
-    r = await session.execute(select(Account).where(Account.status == AccountStatus.available)); return list(r.scalars().all())  #[span_124](start_span)[span_124](end_span)
+    r = await session.execute(select(Account).where(Account.status == AccountStatus.available)); return list(r.scalars().all())  
 
 async def get_sold_accounts(session):
-    r = await session.execute(select(Account).where(Account.status == AccountStatus.sold)); return list(r.scalars().all())  #[span_125](start_span)[span_125](end_span)
+    r = await session.execute(select(Account).where(Account.status == AccountStatus.sold)); return list(r.scalars().all())  
 
 async def delete_account_by_username(session, username):
-    r = await session.execute(select(Account).where(Account.username == username))  #[span_126](start_span)[span_126](end_span)
-    acc = r.scalar_one_or_none()  #[span_127](start_span)[span_127](end_span)
+    r = await session.execute(select(Account).where(Account.username == username))  
+    acc = r.scalar_one_or_none()  
     if acc is None: return False
-    await session.delete(acc)  #[span_128](start_span)[span_128](end_span)
-    await session.commit()  #[span_129](start_span)[span_129](end_span)
+    await session.delete(acc)  
+    await session.commit()  
     return True
 
 async def create_order(session, user_id, quantity, price, file_name):
-    order = Order(user_id=user_id, quantity=quantity, price=price, status=OrderStatus.completed, file_name=file_name)  #[span_130](start_span)[span_130](end_span)
-    session.add(order)  #[span_131](start_span)[span_131](end_span)
-    await session.flush()  #[span_132](start_span)[span_132](end_span)
+    order = Order(user_id=user_id, quantity=quantity, price=price, status=OrderStatus.completed, file_name=file_name)  
+    session.add(order)  
+    await session.flush()  
     return order
 
 async def get_user_orders(session, user_id, limit=20):
-    r = await session.execute(select(Order).where(Order.user_id == user_id).order_by(Order.created_at.desc()).limit(limit))  #[span_133](start_span)[span_133](end_span)
-    return list(r.scalars().all())  #[span_134](start_span)[span_134](end_span)
+    r = await session.execute(select(Order).where(Order.user_id == user_id).order_by(Order.created_at.desc()).limit(limit))  
+    return list(r.scalars().all())  
 
 async def get_all_orders(session, limit=50):
-    r = await session.execute(select(Order).order_by(Order.created_at.desc()).limit(limit))  #[span_135](start_span)[span_135](end_span)
-    return list(r.scalars().all())  #[span_136](start_span)[span_136](end_span)
+    r = await session.execute(select(Order).order_by(Order.created_at.desc()).limit(limit))  
+    return list(r.scalars().all())  
 
 async def create_deposit(session, user_id, amount, bill_image=None):
-    dep = Deposit(user_id=user_id, amount=amount, bill_image=bill_image, status=DepositStatus.pending)  #[span_137](start_span)[span_137](end_span)
-    session.add(dep)  #[span_138](start_span)[span_138](end_span)
-    await session.commit()  #[span_139](start_span)[span_139](end_span)
-    await session.refresh(dep)  #[span_140](start_span)[span_140](end_span)
+    dep = Deposit(user_id=user_id, amount=amount, bill_image=bill_image, status=DepositStatus.pending)  
+    session.add(dep)  
+    await session.commit()  
+    await session.refresh(dep)  
     return dep
 
 async def get_deposit_by_id(session, deposit_id):
-    r = await session.execute(select(Deposit).options(selectinload(Deposit.user)).where(Deposit.id == deposit_id))  #[span_141](start_span)[span_141](end_span)
-    return r.scalar_one_or_none()  #[span_142](start_span)[span_142](end_span)
+    r = await session.execute(select(Deposit).options(selectinload(Deposit.user)).where(Deposit.id == deposit_id))  
+    return r.scalar_one_or_none()  
 
 async def approve_deposit(session, deposit_id, admin_tg_id):
-    dep = await get_deposit_by_id(session, deposit_id)  #[span_143](start_span)[span_143](end_span)
-    if dep is None or dep.status != DepositStatus.pending: return None  #[span_144](start_span)[span_144](end_span)
-    dep.status = DepositStatus.approved  #[span_145](start_span)[span_145](end_span)
-    dep.admin_id = admin_tg_id  #[span_146](start_span)[span_146](end_span)
-    dep.approved_at = datetime.utcnow()  #[span_147](start_span)[span_147](end_span)
-    await session.commit()  #[span_148](start_span)[span_148](end_span)
-    await session.refresh(dep)  #[span_149](start_span)[span_149](end_span)
+    dep = await get_deposit_by_id(session, deposit_id)  
+    if dep is None or dep.status != DepositStatus.pending: return None  
+    dep.status = DepositStatus.approved  
+    dep.admin_id = admin_tg_id  
+    dep.approved_at = datetime.utcnow()  
+    await session.commit()  
+    await session.refresh(dep)  
     return dep
 
 async def reject_deposit(session, deposit_id, admin_tg_id):
-    dep = await get_deposit_by_id(session, deposit_id)  #[span_150](start_span)[span_150](end_span)
-    if dep is None or dep.status != DepositStatus.pending: return None  #[span_151](start_span)[span_151](end_span)
-    dep.status = DepositStatus.rejected  #[span_152](start_span)[span_152](end_span)
-    dep.admin_id = admin_tg_id  #[span_153](start_span)[span_153](end_span)
-    dep.approved_at = datetime.utcnow()  #[span_154](start_span)[span_154](end_span)
-    await session.commit()  #[span_155](start_span)[span_155](end_span)
-    await session.refresh(dep)  #[span_156](start_span)[span_156](end_span)
+    dep = await get_deposit_by_id(session, deposit_id)  
+    if dep is None or dep.status != DepositStatus.pending: return None  
+    dep.status = DepositStatus.rejected  
+    dep.admin_id = admin_tg_id  
+    dep.approved_at = datetime.utcnow()  
+    await session.commit()  
+    await session.refresh(dep)  
     return dep
 
 async def get_pending_deposits(session):
-    r = await session.execute(select(Deposit).options(selectinload(Deposit.user)).where(Deposit.status == DepositStatus.pending).order_by(Deposit.created_at.asc()))  #[span_157](start_span)[span_157](end_span)
-    return list(r.scalars().all())  #[span_158](start_span)[span_158](end_span)
+    r = await session.execute(select(Deposit).options(selectinload(Deposit.user)).where(Deposit.status == DepositStatus.pending).order_by(Deposit.created_at.asc()))  
+    return list(r.scalars().all())  
 
 # ── File utils ────────────────────────────────────────────────────────────────
 async def save_export_file(lines, prefix):
-    os.makedirs(EXPORTS_DIR, exist_ok=True)  #[span_159](start_span)[span_159](end_span)
-    ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")  #[span_160](start_span)[span_160](end_span)
-    fp = os.path.join(EXPORTS_DIR, f"{prefix}_{ts}.txt")  #[span_161](start_span)[span_161](end_span)
-    async with aiofiles.open(fp, "w", encoding="utf-8") as f:  #[span_162](start_span)[span_162](end_span)
-        await f.write("\n".join(lines))  #[span_163](start_span)[span_163](end_span)
-    return fp  #[span_164](start_span)[span_164](end_span)
+    os.makedirs(EXPORTS_DIR, exist_ok=True)  
+    ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")  
+    fp = os.path.join(EXPORTS_DIR, f"{prefix}_{ts}.txt")  
+    async with aiofiles.open(fp, "w", encoding="utf-8") as f:  
+        await f.write("\n".join(lines))  
+    return fp  
 
 async def save_order_file(accounts_data, order_id):
-    os.makedirs(EXPORTS_DIR, exist_ok=True)  #[span_165](start_span)[span_165](end_span)
-    ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")  #[span_166](start_span)[span_166](end_span)
-    filename = f"order_{order_id}_{ts}.txt"  #[span_167](start_span)[span_167](end_span)
-    fp = os.path.join(EXPORTS_DIR, filename)  #[span_168](start_span)[span_168](end_span)
-    async with aiofiles.open(fp, "w", encoding="utf-8") as f:  #[span_169](start_span)[span_169](end_span)
-        await f.write("\n".join(f"{u}|{p}" for u, p in accounts_data))  #[span_170](start_span)[span_170](end_span)
-    return fp, filename  #[span_171](start_span)[span_171](end_span)
+    os.makedirs(EXPORTS_DIR, exist_ok=True)  
+    ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")  
+    filename = f"order_{order_id}_{ts}.txt"  
+    fp = os.path.join(EXPORTS_DIR, filename)  
+    async with aiofiles.open(fp, "w", encoding="utf-8") as f:  
+        await f.write("\n".join(f"{u}|{p}" for u, p in accounts_data))  
+    return fp, filename  
 
 async def save_bill_image(file_bytes, extension="jpg"):
-    os.makedirs(UPLOADS_DIR, exist_ok=True)  #[span_172](start_span)[span_172](end_span)
-    fp = os.path.join(UPLOADS_DIR, f"bill_{uuid.uuid4().hex}.{extension}")  #[span_173](start_span)[span_173](end_span)
-    async with aiofiles.open(fp, "wb") as f:  #[span_174](start_span)[span_174](end_span)
-        await f.write(file_bytes)  #[span_175](start_span)[span_175](end_span)
-    return fp  #[span_176](start_span)[span_176](end_span)
+    os.makedirs(UPLOADS_DIR, exist_ok=True)  
+    fp = os.path.join(UPLOADS_DIR, f"bill_{uuid.uuid4().hex}.{extension}")  
+    async with aiofiles.open(fp, "wb") as f:  
+        await f.write(file_bytes)  
+    return fp  
 
 async def save_qr_image(file_bytes):
-    os.makedirs(UPLOADS_DIR, exist_ok=True)  #[span_177](start_span)[span_177](end_span)
-    async with aiofiles.open(QR_IMAGE_PATH, "wb") as f:  #[span_178](start_span)[span_178](end_span)
-        await f.write(file_bytes)  #[span_179](start_span)[span_179](end_span)
-    return QR_IMAGE_PATH  #[span_180](start_span)[span_180](end_span)
+    os.makedirs(UPLOADS_DIR, exist_ok=True)  
+    async with aiofiles.open(QR_IMAGE_PATH, "wb") as f:  
+        await f.write(file_bytes)  
+    return QR_IMAGE_PATH  
 
 def qr_exists():
-    return os.path.isfile(QR_IMAGE_PATH)  #[span_181](start_span)[span_181](end_span)
+    return os.path.isfile(QR_IMAGE_PATH)  
 
 # ── Keyboards ─────────────────────────────────────────────────────────────────
 def main_menu_kb():
-    b = ReplyKeyboardBuilder()  #[span_182](start_span)[span_182](end_span)
-    b.row(KeyboardButton(text="🏠 Trang Chủ"), KeyboardButton(text="🛒 Mua Acc"))  #[span_183](start_span)[span_183](end_span)
-    b.row(KeyboardButton(text="💳 Nạp Tiền"), KeyboardButton(text="👤 Tài Khoản"))  #[span_184](start_span)[span_184](end_span)
+    b = ReplyKeyboardBuilder()  
+    b.row(KeyboardButton(text="🏠 Trang Chủ"), KeyboardButton(text="🛒 Mua Acc"))  
+    b.row(KeyboardButton(text="💳 Nạp Tiền"), KeyboardButton(text="👤 Tài Khoản"))  
     b.row(KeyboardButton(text="🎲 Chơi Tài Xỉu"), KeyboardButton(text="🎁 Điểm Danh"))
     b.row(KeyboardButton(text="🔗 Giới Thiệu"), KeyboardButton(text="🏆 Top Đại Gia"))
     b.row(KeyboardButton(text="🪙 Đổi Tiền"), KeyboardButton(text="🎁 Nhập Mã"))
-    b.row(KeyboardButton(text="📦 Đơn Hàng"), KeyboardButton(text="☎ Hỗ Trợ"))  #[span_185](start_span)[span_185](end_span)
-    return b.as_markup(resize_keyboard=True)  #[span_186](start_span)[span_186](end_span)
+    b.row(KeyboardButton(text="📦 Đơn Hàng"), KeyboardButton(text="☎ Hỗ Trợ"))  
+    return b.as_markup(resize_keyboard=True)  
 
 def cancel_kb():
-    b = ReplyKeyboardBuilder()  #[span_187](start_span)[span_187](end_span)
-    b.row(KeyboardButton(text="❌ Hủy"))  #[span_188](start_span)[span_188](end_span)
-    return b.as_markup(resize_keyboard=True)  #[span_189](start_span)[span_189](end_span)
+    b = ReplyKeyboardBuilder()  
+    b.row(KeyboardButton(text="❌ Hủy"))  
+    return b.as_markup(resize_keyboard=True)  
 
 def deposit_approval_kb(deposit_id):
-    b = InlineKeyboardBuilder()  #[span_190](start_span)[span_190](end_span)
+    b = InlineKeyboardBuilder()  
     b.row(
-        InlineKeyboardButton(text="✅ DUYỆT", callback_data=f"approve_deposit:{deposit_id}"),  #[span_191](start_span)[span_191](end_span)
-        InlineKeyboardButton(text="❌ TỪ CHỐI", callback_data=f"reject_deposit:{deposit_id}"),  #[span_192](start_span)[span_192](end_span)
+        InlineKeyboardButton(text="✅ DUYỆT", callback_data=f"approve_deposit:{deposit_id}"),  
+        InlineKeyboardButton(text="❌ TỪ CHỐI", callback_data=f"reject_deposit:{deposit_id}"),  
     )
-    return b.as_markup()  #[span_193](start_span)[span_193](end_span)
+    return b.as_markup()  
 
 def tai_xiu_inline_kb():
     b = InlineKeyboardBuilder()
     b.row(
-        InlineKeyboardButton(text="🔴 Tài  (11–18)", callback_data="tx:tai"),  #[span_194](start_span)[span_194](end_span)
-        InlineKeyboardButton(text="🔵 Xỉu  (3–10)",  callback_data="tx:xiu"),  #[span_195](start_span)[span_195](end_span)
+        InlineKeyboardButton(text="🔴 Tài  (11–18)", callback_data="tx:tai"),  
+        InlineKeyboardButton(text="🔵 Xỉu  (3–10)",  callback_data="tx:xiu"),  
     )
     return b.as_markup()
 
 def admin_menu_kb():
-    b = ReplyKeyboardBuilder()  #[span_196](start_span)[span_196](end_span)
-    b.row(KeyboardButton(text="📊 Dashboard"), KeyboardButton(text="📥 Import TXT"))  #[span_197](start_span)[span_197](end_span)
-    b.row(KeyboardButton(text="📦 Xem Kho"), KeyboardButton(text="📊 Thống Kê"))  #[span_198](start_span)[span_198](end_span)
-    b.row(KeyboardButton(text="💰 Cộng Tiền"), KeyboardButton(text="💸 Trừ Tiền"))  #[span_199](start_span)[span_199](end_span)
+    b = ReplyKeyboardBuilder()  
+    b.row(KeyboardButton(text="📊 Dashboard"), KeyboardButton(text="📥 Import TXT"))  
+    b.row(KeyboardButton(text="📦 Xem Kho"), KeyboardButton(text="📊 Thống Kê"))  
+    b.row(KeyboardButton(text="💰 Cộng Tiền"), KeyboardButton(text="💸 Trừ Tiền"))  
     b.row(KeyboardButton(text="🪙 Cộng Xu"), KeyboardButton(text="🪙 Trừ Xu"))
     b.row(KeyboardButton(text="🎫 Tạo Code"), KeyboardButton(text="🎫 Danh Sách Code"))
-    b.row(KeyboardButton(text="📷 Đổi QR"), KeyboardButton(text="📥 Bill Chờ"))  #[span_200](start_span)[span_200](end_span)
-    b.row(KeyboardButton(text="📢 Broadcast"), KeyboardButton(text="🚫 Ban User"))  #[span_201](start_span)[span_201](end_span)
-    b.row(KeyboardButton(text="✅ Unban User"), KeyboardButton(text="🗑 Xóa Account"))  #[span_202](start_span)[span_202](end_span)
-    b.row(KeyboardButton(text="📤 Export Chưa Bán"), KeyboardButton(text="📤 Export Đã Bán"))  #[span_203](start_span)[span_203](end_span)
-    b.row(KeyboardButton(text="🔙 Menu Chính"))  #[span_204](start_span)[span_204](end_span)
-    return b.as_markup(resize_keyboard=True)  #[span_205](start_span)[span_205](end_span)
+    b.row(KeyboardButton(text="📷 Đổi QR"), KeyboardButton(text="📥 Bill Chờ"))  
+    b.row(KeyboardButton(text="📢 Broadcast"), KeyboardButton(text="🚫 Ban User"))  
+    b.row(KeyboardButton(text="✅ Unban User"), KeyboardButton(text="🗑 Xóa Account"))  
+    b.row(KeyboardButton(text="📤 Export Chưa Bán"), KeyboardButton(text="📤 Export Đã Bán"))  
+    b.row(KeyboardButton(text="🔙 Menu Chính"))  
+    return b.as_markup(resize_keyboard=True)  
 
 # ── Middleware ────────────────────────────────────────────────────────────────
-class AuthMiddleware(BaseMiddleware):  #[span_206](start_span)[span_206](end_span)
+class AuthMiddleware(BaseMiddleware):  
     async def __call__(self, handler, event, data):
-        user = data.get("event_from_user")  #[span_207](start_span)[span_207](end_span)
-        if user is None: return await handler(event, data)  #[span_208](start_span)[span_208](end_span)
-        is_admin = user.id in ADMIN_IDS  #[span_209](start_span)[span_209](end_span)
-        fullname = (user.full_name or "").strip() or user.username or str(user.id)  #[span_210](start_span)[span_210](end_span)
-        async with AsyncSessionLocal() as session:  #[span_211](start_span)[span_211](end_span)
-            db_user = await get_or_create_user(session, user.id, user.username, fullname, is_admin)  #[span_212](start_span)[span_212](end_span)
+        user = data.get("event_from_user")  
+        if user is None: return await handler(event, data)  
+        is_admin = user.id in ADMIN_IDS  
+        fullname = (user.full_name or "").strip() or user.username or str(user.id)  
+        async with AsyncSessionLocal() as session:  
+            db_user = await get_or_create_user(session, user.id, user.username, fullname, is_admin)  
             if db_user.is_admin != is_admin:
                 db_user.is_admin = is_admin
-                await session.commit()  #[span_213](start_span)[span_213](end_span)
-            data["db_user"] = db_user  #[span_214](start_span)[span_214](end_span)
-            data["db_session"] = session  #[span_215](start_span)[span_215](end_span)
-            data["is_admin"] = is_admin  #[span_216](start_span)[span_216](end_span)
-            if db_user.is_banned and not is_admin:  #[span_217](start_span)[span_217](end_span)
-                if isinstance(event, Message): await event.answer("🚫 Bạn đã bị cấm sử dụng bot.")  #[span_218](start_span)[span_218](end_span)
+                await session.commit()  
+            data["db_user"] = db_user  
+            data["db_session"] = session  
+            data["is_admin"] = is_admin  
+            if db_user.is_banned and not is_admin:  
+                if isinstance(event, Message): await event.answer("🚫 Bạn đã bị cấm sử dụng bot.")  
                 return
-            return await handler(event, data)  #[span_219](start_span)[span_219](end_span)
+            return await handler(event, data)  
 
 # ── States ────────────────────────────────────────────────────────────────────
-class ShopState(StatesGroup):  #[span_220](start_span)[span_220](end_span)
-    waiting_quantity = State()  #[span_221](start_span)[span_221](end_span)
+class ShopState(StatesGroup):  
+    waiting_quantity = State()  
 
-class DepositState(StatesGroup):  #[span_222](start_span)[span_222](end_span)
-    waiting_amount = State()  #[span_223](start_span)[span_223](end_span)
-    waiting_bill = State()  #[span_224](start_span)[span_224](end_span)
+class DepositState(StatesGroup):  
+    waiting_amount = State()  
+    waiting_bill = State()  
 
 class TaixiuState(StatesGroup):
     waiting_bet = State()
@@ -492,13 +520,13 @@ class TaixiuState(StatesGroup):
 class CodeState(StatesGroup):
     waiting_code_input = State()
 
-class AdminStates(StatesGroup):  #[span_225](start_span)[span_225](end_span)
-    waiting_qr = State()  #[span_226](start_span)[span_226](end_span)
-    waiting_import_file = State()  #[span_227](start_span)[span_227](end_span)
-    waiting_add_balance_id = State()  #[span_228](start_span)[span_228](end_span)
-    waiting_add_balance_amount = State()  #[span_229](start_span)[span_229](end_span)
-    waiting_subtract_balance_id = State()  #[span_230](start_span)[span_230](end_span)
-    waiting_subtract_balance_amount = State()  #[span_231](start_span)[span_231](end_span)
+class AdminStates(StatesGroup):  
+    waiting_qr = State()  
+    waiting_import_file = State()  
+    waiting_add_balance_id = State()  
+    waiting_add_balance_amount = State()  
+    waiting_subtract_balance_id = State()  
+    waiting_subtract_balance_amount = State()  
     waiting_add_xu_id = State()
     waiting_add_xu_amount = State()
     waiting_subtract_xu_id = State()
@@ -506,29 +534,28 @@ class AdminStates(StatesGroup):  #[span_225](start_span)[span_225](end_span)
     waiting_create_code_name = State()
     waiting_create_code_xu = State()
     waiting_create_code_uses = State()
-    waiting_ban_id = State()  #[span_232](start_span)[span_232](end_span)
-    waiting_unban_id = State()  #[span_233](start_span)[span_233](end_span)
-    waiting_delete_username = State()  #[span_234](start_span)[span_234](end_span)
-    waiting_broadcast_text = State()  #[span_235](start_span)[span_235](end_span)
+    waiting_ban_id = State()  
+    waiting_unban_id = State()  
+    waiting_delete_username = State()  
+    waiting_broadcast_text = State()  
 
-def admin_only(func):  #[span_236](start_span)[span_236](end_span)
+def admin_only(func):  
     @functools.wraps(func)
     async def wrapper(message: Message, is_admin: bool, *args, **kwargs):
         if not is_admin:
-            await message.answer("❌ Bạn không có quyền truy cập.")  #[span_237](start_span)[span_237](end_span)
+            await message.answer("❌ Bạn không có quyền truy cập.")  
             return
         return await func(message, is_admin=is_admin, *args, **kwargs)
-    return wrapper  #[span_238](start_span)[span_238](end_span)
+    return wrapper  
 
 # ── Router ────────────────────────────────────────────────────────────────────
-router = Router()  #[span_239](start_span)[span_239](end_span)
+router = Router()  
 
 # ── /start & home ─────────────────────────────────────────────────────────────
 @router.message(CommandStart())
 async def cmd_start(message: Message, command: CommandObject, state: FSMContext, db_user: User, db_session, bot: Bot):
-    await state.clear()  #[span_240](start_span)[span_240](end_span)
+    await state.clear()  
     
-    # Check giới thiệu tài khoản mới tinh
     is_new = (datetime.utcnow() - db_user.created_at).total_seconds() < 15
     ref_args = command.args
     
@@ -552,76 +579,76 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext,
                     )
                 except Exception: pass
 
-    name = db_user.fullname or message.from_user.full_name or "bạn"  #[span_241](start_span)[span_241](end_span)
-    available = await get_available_count(db_session)  #[span_242](start_span)[span_242](end_span)
+    name = db_user.fullname or message.from_user.full_name or "bạn"  
+    available = await get_available_count(db_session)  
     await message.answer(
-        f"👋 Chào mừng <b>{name}</b> đến với Shop Liên Quân & Giải Trí!\n\n"  #[span_243](start_span)[span_243](end_span)
-        f"🛒 Mua acc tự động, giá rẻ\n"  #[span_244](start_span)[span_244](end_span)
-        f"💰 Số dư tiền: <b>{db_user.balance:,} VNĐ</b>\n"  #[span_245](start_span)[span_245](end_span)
+        f"👋 Chào mừng <b>{name}</b> đến với Shop Liên Quân & Giải Trí!\n\n"  
+        f"🛒 Mua acc tự động, giá rẻ\n"  
+        f"💰 Số dư tiền: <b>{db_user.balance:,} VNĐ</b>\n"  
         f"🎲 Ví giải trí: <b>{db_user.xu:,} xu</b>\n"
-        f"📦 Kho còn: <b>{available:,} acc</b>\n\n"  #[span_246](start_span)[span_246](end_span)
+        f"📦 Kho còn: <b>{available:,} acc</b>\n\n"  
         f"⚡ Cú pháp cược nhanh Tài Xỉu (Tung đồng thời): <code>/tx [t/x] [xu]</code>\n"
         f"_(Ví dụ đặt Tài 50 xu: /tx t 50)_",
         parse_mode="HTML",
-        reply_markup=main_menu_kb(),  #[span_247](start_span)[span_247](end_span)
+        reply_markup=main_menu_kb(),  
     )
 
 @router.message(lambda m: m.text == "🏠 Trang Chủ")
 async def home(message: Message, state: FSMContext, db_user: User, db_session):
-    await state.clear()  #[span_248](start_span)[span_248](end_span)
-    available = await get_available_count(db_session)  #[span_249](start_span)[span_249](end_span)
-    name = db_user.fullname or message.from_user.full_name or "bạn"  #[span_250](start_span)[span_250](end_span)
+    await state.clear()  
+    available = await get_available_count(db_session)  
+    name = db_user.fullname or message.from_user.full_name or "bạn"  
     await message.answer(
-        f"🏠 <b>Trang Chủ</b>\n\n"  #[span_251](start_span)[span_251](end_span)
-        f"👋 Xin chào <b>{name}</b>!\n"  #[span_252](start_span)[span_252](end_span)
-        f"💰 Số dư tiền: <b>{db_user.balance:,} VNĐ</b>\n"  #[span_253](start_span)[span_253](end_span)
+        f"🏠 <b>Trang Chủ</b>\n\n"  
+        f"👋 Xin chào <b>{name}</b>!\n"  
+        f"💰 Số dư tiền: <b>{db_user.balance:,} VNĐ</b>\n"  
         f"🎲 Ví giải trí: <b>{db_user.xu:,} xu</b>\n"
-        f"📦 Kho còn: <b>{available:,} acc</b>",  #[span_254](start_span)[span_254](end_span)
+        f"📦 Kho còn: <b>{available:,} acc</b>",  
         parse_mode="HTML",
-        reply_markup=main_menu_kb(),  #[span_255](start_span)[span_255](end_span)
+        reply_markup=main_menu_kb(),  
     )
 
 @router.message(lambda m: m.text == "☎ Hỗ Trợ")
 async def support(message: Message, state: FSMContext):
-    await state.clear()  #[span_256](start_span)[span_256](end_span)
+    await state.clear()  
     await message.answer(
-        "☎ <b>Hỗ Trợ Khách Hàng</b>\n\n"  #[span_257](start_span)[span_257](end_span)
+        "☎ <b>Hỗ Trợ Khách Hàng</b>\n\n"  
         "Nếu gặp lỗi hoặc cần giải đáp, liên hệ Admin:\n"
-        "👤 Admin: @lananh9719\n\n"  #[span_258](start_span)[span_258](end_span)
-        "⏰ Hoạt động: 8:00 - 22:00 hàng ngày.",  #[span_259](start_span)[span_259](end_span)
+        "👤 Admin: @lananh9719\n\n"  
+        "⏰ Hoạt động: 8:00 - 22:00 hàng ngày.",  
         parse_mode="HTML",
     )
 
 # ── Shop Liên Quân ────────────────────────────────────────────────────────────
 @router.message(lambda m: m.text == "🛒 Mua Acc")
 async def buy_acc_start(message: Message, state: FSMContext, db_session):
-    await state.clear()  #[span_260](start_span)[span_260](end_span)
-    available = await get_available_count(db_session)  #[span_261](start_span)[span_261](end_span)
+    await state.clear()  
+    available = await get_available_count(db_session)  
     await message.answer(
-        f"🛒 <b>Mua Acc Liên Quân</b>\n\n"  #[span_262](start_span)[span_262](end_span)
-        f"💵 Giá bán: <b>{ACCOUNT_PRICE:,} VNĐ / acc</b>\n"  #[span_263](start_span)[span_263](end_span)
-        f"📦 Kho còn: <b>{available:,} acc</b>\n"  #[span_264](start_span)[span_264](end_span)
-        f"⚠️ Yêu cầu mua tối thiểu: <b>{MIN_ORDER_QTY} acc</b>\n\n"  #[span_265](start_span)[span_265](end_span)
+        f"🛒 <b>Mua Acc Liên Quân</b>\n\n"  
+        f"💵 Giá bán: <b>{ACCOUNT_PRICE:,} VNĐ / acc</b>\n"  
+        f"📦 Kho còn: <b>{available:,} acc</b>\n"  
+        f"⚠️ Yêu cầu mua tối thiểu: <b>{MIN_ORDER_QTY} acc</b>\n\n"  
         "Vui lòng nhập số lượng acc muốn mua:",
         parse_mode="HTML",
-        reply_markup=cancel_kb(),  #[span_266](start_span)[span_266](end_span)
+        reply_markup=cancel_kb(),  
     )
-    await state.set_state(ShopState.waiting_quantity)  #[span_267](start_span)[span_267](end_span)
+    await state.set_state(ShopState.waiting_quantity)  
 
 @router.message(ShopState.waiting_quantity, F.text == "❌ Hủy")
 async def buy_cancel(message: Message, state: FSMContext):
-    await state.clear()  #[span_268](start_span)[span_268](end_span)
-    await message.answer("❌ Đã hủy giao dịch.", reply_markup=main_menu_kb())  #[span_269](start_span)[span_269](end_span)
+    await state.clear()  
+    await message.answer("❌ Đã hủy giao dịch.", reply_markup=main_menu_kb())  
 
 @router.message(ShopState.waiting_quantity, ~F.text.in_(MENU_BUTTONS))
 async def buy_acc_quantity(message: Message, state: FSMContext, db_user: User, db_session):
     text = message.text or ""
     if not text.isdigit():
-        await message.answer("⚠️ Vui lòng nhập số nguyên hợp lệ.")  #[span_270](start_span)[span_270](end_span)
+        await message.answer("⚠️ Vui lòng nhập số nguyên hợp lệ.")  
         return
     quantity = int(text)
     if quantity < MIN_ORDER_QTY:
-        await message.answer(f"⚠️ Số lượng tối thiểu là <b>{MIN_ORDER_QTY} acc</b>.", parse_mode="HTML")  #[span_271](start_span)[span_271](end_span)
+        await message.answer(f"⚠️ Số lượng tối thiểu là <b>{MIN_ORDER_QTY} acc</b>.", parse_mode="HTML")  
         return
     total_price = quantity * ACCOUNT_PRICE
     
@@ -631,177 +658,177 @@ async def buy_acc_quantity(message: Message, state: FSMContext, db_user: User, d
     if fresh_user.balance < total_price:
         shortage = total_price - fresh_user.balance
         await message.answer(
-            f"❌ <b>Số dư VNĐ không đủ!</b>\n\n"  #[span_272](start_span)[span_272](end_span)
-            f"💰 Hiện có: <b>{fresh_user.balance:,} VNĐ</b>\n"  #[span_273](start_span)[span_273](end_span)
-            f"💵 Cần thanh toán: <b>{total_price:,} VNĐ</b>\n"  #[span_274](start_span)[span_274](end_span)
-            f"⚠️ Thiếu: <b>{shortage:,} VNĐ</b>\n\nVui lòng nạp thêm tiền.",  #[span_275](start_span)[span_275](end_span)
-            parse_mode="HTML", reply_markup=main_menu_kb()  #[span_276](start_span)[span_276](end_span)
+            f"❌ <b>Số dư VNĐ không đủ!</b>\n\n"  
+            f"💰 Hiện có: <b>{fresh_user.balance:,} VNĐ</b>\n"  
+            f"💵 Cần thanh toán: <b>{total_price:,} VNĐ</b>\n"  
+            f"⚠️ Thiếu: <b>{shortage:,} VNĐ</b>\n\nVui lòng nạp thêm tiền.",  
+            parse_mode="HTML", reply_markup=main_menu_kb()  
         )
-        await state.clear()  #[span_277](start_span)[span_277](end_span)
+        await state.clear()  
         return
         
-    available = await get_available_count(db_session)  #[span_278](start_span)[span_278](end_span)
+    available = await get_available_count(db_session)  
     if available < quantity:
-        await message.answer(f"❌ Kho không đủ hàng!\n📦 Kho hiện còn: <b>{available:,} acc</b>", parse_mode="HTML", reply_markup=main_menu_kb())  #[span_279](start_span)[span_279](end_span)
-        await state.clear()  #[span_280](start_span)[span_280](end_span)
+        await message.answer(f"❌ Kho không đủ hàng!\n📦 Kho hiện còn: <b>{available:,} acc</b>", parse_mode="HTML", reply_markup=main_menu_kb())  
+        await state.clear()  
         return
 
     accounts = await pick_random_accounts(db_session, quantity)
     if len(accounts) < quantity:
-        await message.answer("❌ Có lỗi xảy ra khi lấy tài khoản. Thử lại sau.", reply_markup=main_menu_kb())  #[span_281](start_span)[span_281](end_span)
-        await state.clear()  #[span_282](start_span)[span_282](end_span)
+        await message.answer("❌ Có lỗi xảy ra khi lấy tài khoản. Thử lại sau.", reply_markup=main_menu_kb())  
+        await state.clear()  
         return
 
-    order = await create_order(db_session, fresh_user.id, quantity, total_price, "")  #[span_283](start_span)[span_283](end_span)
+    order = await create_order(db_session, fresh_user.id, quantity, total_price, "")  
     fresh_user.balance -= total_price
-    await mark_accounts_sold(db_session, accounts, order.id)  #[span_284](start_span)[span_284](end_span)
+    await mark_accounts_sold(db_session, accounts, order.id)  
 
     account_data = [(a.username, a.password) for a in accounts]
-    filepath, filename = await save_order_file(account_data, order.id)  #[span_285](start_span)[span_285](end_span)
-    order.file_name = filename  #[span_286](start_span)[span_286](end_span)
-    await db_session.commit()  #[span_287](start_span)[span_287](end_span)
-    await state.clear()  #[span_288](start_span)[span_288](end_span)
+    filepath, filename = await save_order_file(account_data, order.id)  
+    order.file_name = filename  
+    await db_session.commit()  
+    await state.clear()  
 
     await message.answer(
-        f"✅ <b>Mua hàng thành công!</b>\n\n"  #[span_289](start_span)[span_289](end_span)
-        f"📦 Số lượng: <b>{quantity} acc</b>\n"  #[span_290](start_span)[span_290](end_span)
-        f"💵 Tổng tiền: <b>{total_price:,} VNĐ</b>\n"  #[span_291](start_span)[span_291](end_span)
-        f"🧾 Mã đơn: <b>#{order.id}</b>\n\nĐang gửi file...",  #[span_292](start_span)[span_292](end_span)
-        parse_mode="HTML", reply_markup=main_menu_kb()  #[span_293](start_span)[span_293](end_span)
+        f"✅ <b>Mua hàng thành công!</b>\n\n"  
+        f"📦 Số lượng: <b>{quantity} acc</b>\n"  
+        f"💵 Tổng tiền: <b>{total_price:,} VNĐ</b>\n"  
+        f"🧾 Mã đơn: <b>#{order.id}</b>\n\nĐang gửi file...",  
+        parse_mode="HTML", reply_markup=main_menu_kb()  
     )
-    await message.answer_document(FSInputFile(filepath, filename=filename), caption=f"📄 Đơn hàng #{order.id} — {quantity} acc")  #[span_294](start_span)[span_294](end_span)
-    await message.answer(f"📌 Link check acc free:\n{CHECKER_LINK}")  #[span_295](start_span)[span_295](end_span)
+    await message.answer_document(FSInputFile(filepath, filename=filename), caption=f"📄 Đơn hàng #{order.id} — {quantity} acc")  
+    await message.answer(f"📌 Link check acc free:\n{CHECKER_LINK}")  
 
 # ── Tài khoản & Đơn hàng ─────────────────────────────────────────────────────
 @router.message(lambda m: m.text == "👤 Tài Khoản")
 async def my_account(message: Message, state: FSMContext, db_user: User, db_session):
-    await state.clear()  #[span_296](start_span)[span_296](end_span)
-    joined = db_user.created_at.strftime("%d/%m/%Y") if db_user.created_at else "N/A"  #[span_297](start_span)[span_297](end_span)
-    orders = await get_user_orders(db_session, db_user.id, limit=9999)  #[span_298](start_span)[span_298](end_span)
-    uname = f"@{db_user.username}" if db_user.username else "Không có"  #[span_299](start_span)[span_299](end_span)
+    await state.clear()  
+    joined = db_user.created_at.strftime("%d/%m/%Y") if db_user.created_at else "N/A"  
+    orders = await get_user_orders(db_session, db_user.id, limit=9999)  
+    uname = f"@{db_user.username}" if db_user.username else "Không có"  
     await message.answer(
-        f"👤 <b>Thông Tin Tài Khoản</b>\n\n"  #[span_300](start_span)[span_300](end_span)
-        f"🆔 ID Telegram: <code>{db_user.telegram_id}</code>\n"  #[span_301](start_span)[span_301](end_span)
-        f"👤 Username: {uname}\n"  #[span_302](start_span)[span_302](end_span)
-        f"📛 Tên: {db_user.fullname}\n\n"  #[span_303](start_span)[span_303](end_span)
-        f"💰 Số dư VNĐ: <b>{db_user.balance:,} VNĐ</b>\n"  #[span_304](start_span)[span_304](end_span)
-        f"🎲 Số dư Xu: <b>{db_user.xu:,} xu</b>\n"
-        f"👥 Đã giới thiệu: <b>{db_user.total_ref} người</b>\n"
-        f"📦 Đơn đã mua: <b>{len(orders)}</b>\n"  #[span_305](start_span)[span_305](end_span)
-        f"📅 Tham gia ngày: {joined}",  #[span_306](start_span)[span_306](end_span)
+        f"👤 <b>Thông Tin Tài Khoản</b>\n\n"  
+        f"🆔 ID Telegram: <code>{db_user.telegram_id}</code>\n"  
+        f"👤 Username: {uname}\n"  
+        f"📛 Tên: {db_user.fullname}\n\n"  
+        f"💰 Số dư VNĐ: <b>{db_user.balance:,} VNĐ</b>\n"  
+        f"🎲 Số dư Xu: <b>{db_user.xu:,} xu</b>\n"  
+        f"👥 Đã giới thiệu: <b>{db_user.total_ref} người</b>\n"  
+        f"📦 Đơn đã mua: <b>{len(orders)}</b>\n"  
+        f"📅 Tham gia ngày: {joined}",  
         parse_mode="HTML",
     )
 
 @router.message(lambda m: m.text == "📦 Đơn Hàng")
 async def my_orders(message: Message, state: FSMContext, db_user: User, db_session):
-    await state.clear()  #[span_307](start_span)[span_307](end_span)
-    orders = await get_user_orders(db_session, db_user.id, limit=20)  #[span_308](start_span)[span_308](end_span)
+    await state.clear()  
+    orders = await get_user_orders(db_session, db_user.id, limit=20)  
     if not orders:
-        await message.answer("📦 Bạn chưa mua đơn hàng nào.")  #[span_309](start_span)[span_309](end_span)
+        await message.answer("📦 Bạn chưa mua đơn hàng nào.")  
         return
-    lines = ["📦 <b>20 Đơn Hàng Gần Nhất</b>\n"]  #[span_310](start_span)[span_310](end_span)
+    lines = ["📦 <b>20 Đơn Hàng Gần Nhất</b>\n"]  
     for i, o in enumerate(orders, 1):
-        created = o.created_at.strftime("%d/%m/%Y %H:%M") if o.created_at else "N/A"  #[span_311](start_span)[span_311](end_span)
-        lines.append(f"{i}. Đơn #{o.id} — {o.quantity} acc — {o.price:,} VNĐ — {created}")  #[span_312](start_span)[span_312](end_span)
-    await message.answer("\n".join(lines), parse_mode="HTML")  #[span_313](start_span)[span_313](end_span)
+        created = o.created_at.strftime("%d/%m/%Y %H:%M") if o.created_at else "N/A"  
+        lines.append(f"{i}. Đơn #{o.id} — {o.quantity} acc — {o.price:,} VNĐ — {created}")  
+    await message.answer("\n".join(lines), parse_mode="HTML")  
 
 # ── Nạp tiền VNĐ ──────────────────────────────────────────────────────────────
 @router.message(lambda m: m.text == "💳 Nạp Tiền")
 async def deposit_start(message: Message, state: FSMContext):
-    await state.clear()  #[span_314](start_span)[span_314](end_span)
+    await state.clear()  
     if not qr_exists():
-        await message.answer("⚠️ Hệ thống nạp tiền đang bảo trì (Thiếu QR). Vui lòng liên hệ Admin.")  #[span_315](start_span)[span_315](end_span)
+        await message.answer("⚠️ Hệ thống nạp tiền đang bảo trì (Thiếu QR). Vui lòng liên hệ Admin.")  
         return
     await message.answer_photo(
-        FSInputFile(QR_IMAGE_PATH),  #[span_316](start_span)[span_316](end_span)
+        FSInputFile(QR_IMAGE_PATH),  
         caption="💳 <b>Nạp Tiền Qua QR</b>\n\nQuét mã QR để chuyển khoản tiền thật.\n\nNhập số tiền muốn nạp (VNĐ):",
-        parse_mode="HTML", reply_markup=cancel_kb()  #[span_317](start_span)[span_317](end_span)
+        parse_mode="HTML", reply_markup=cancel_kb()  
     )
-    await state.set_state(DepositState.waiting_amount)  #[span_318](start_span)[span_318](end_span)
+    await state.set_state(DepositState.waiting_amount)  
 
 @router.message(DepositState.waiting_amount, F.text == "❌ Hủy")
 async def deposit_cancel_amount(message: Message, state: FSMContext):
-    await state.clear()  #[span_319](start_span)[span_319](end_span)
-    await message.answer("❌ Đã hủy nạp tiền.", reply_markup=main_menu_kb())  #[span_320](start_span)[span_320](end_span)
+    await state.clear()  
+    await message.answer("❌ Đã hủy nạp tiền.", reply_markup=main_menu_kb())  
 
 @router.message(DepositState.waiting_amount, ~F.text.in_(MENU_BUTTONS))
 async def deposit_amount(message: Message, state: FSMContext):
-    text = (message.text or "").replace(",", "").replace(".", "").strip()  #[span_321](start_span)[span_321](end_span)
+    text = (message.text or "").replace(",", "").replace(".", "").strip()  
     if not text.isdigit() or int(text) <= 0:
-        await message.answer("⚠️ Vui lòng nhập số tiền hợp lệ.")  #[span_322](start_span)[span_322](end_span)
+        await message.answer("⚠️ Vui lòng nhập số tiền hợp lệ.")  
         return
     amount = int(text)
-    await state.update_data(amount=amount)  #[span_323](start_span)[span_323](end_span)
-    await message.answer(f"💵 Số tiền nạp: <b>{amount:,} VNĐ</b>\n\n📷 Vui lòng gửi ảnh chụp màn hình bill chuyển khoản:", parse_mode="HTML", reply_markup=cancel_kb())  #[span_324](start_span)[span_324](end_span)
-    await state.set_state(DepositState.waiting_bill)  #[span_325](start_span)[span_325](end_span)
+    await state.update_data(amount=amount)  
+    await message.answer(f"💵 Số tiền nạp: <b>{amount:,} VNĐ</b>\n\n📷 Vui lòng gửi ảnh chụp màn hình bill chuyển khoản:", parse_mode="HTML", reply_markup=cancel_kb())  
+    await state.set_state(DepositState.waiting_bill)  
 
 @router.message(DepositState.waiting_bill, F.text == "❌ Hủy")
 async def deposit_cancel_bill(message: Message, state: FSMContext):
-    await state.clear()  #[span_326](start_span)[span_326](end_span)
-    await message.answer("❌ Đã hủy nạp tiền.", reply_markup=main_menu_kb())  #[span_327](start_span)[span_327](end_span)
+    await state.clear()  
+    await message.answer("❌ Đã hủy nạp tiền.", reply_markup=main_menu_kb())  
 
 @router.message(DepositState.waiting_bill, F.photo)
 async def deposit_bill_photo(message: Message, state: FSMContext, bot: Bot, db_user: User, db_session):
-    data = await state.get_data()  #[span_328](start_span)[span_328](end_span)
-    amount = data.get("amount", 0)  #[span_329](start_span)[span_329](end_span)
-    await state.clear()  #[span_330](start_span)[span_330](end_span)
-    photo = message.photo[-1]  #[span_331](start_span)[span_331](end_span)
-    file = await bot.get_file(photo.file_id)  #[span_332](start_span)[span_332](end_span)
-    file_bytes = await bot.download_file(file.file_path)  #[span_333](start_span)[span_333](end_span)
-    bill_path = await save_bill_image(file_bytes.read(), "jpg")  #[span_334](start_span)[span_334](end_span)
+    data = await state.get_data()  
+    amount = data.get("amount", 0)  
+    await state.clear()  
+    photo = message.photo[-1]  
+    file = await bot.get_file(photo.file_id)  
+    file_bytes = await bot.download_file(file.file_path)  
+    bill_path = await save_bill_image(file_bytes.read(), "jpg")  
     
-    deposit = await create_deposit(db_session, db_user.id, amount, bill_path)  #[span_335](start_span)[span_335](end_span)
-    uname = f"@{db_user.username}" if db_user.username else "Không có"  #[span_336](start_span)[span_336](end_span)
-    now_str = datetime.utcnow().strftime("%d/%m/%Y %H:%M:%S")  #[span_337](start_span)[span_337](end_span)
+    deposit = await create_deposit(db_session, db_user.id, amount, bill_path)  
+    uname = f"@{db_user.username}" if db_user.username else "Không có"  
+    now_str = datetime.utcnow().strftime("%d/%m/%Y %H:%M:%S")  
     caption = (
-        f"💳 <b>YÊU CẦU NẠP TIỀN</b>\n\n"  #[span_338](start_span)[span_338](end_span)
-        f"🆔 ID Telegram: <code>{db_user.telegram_id}</code>\n"  #[span_339](start_span)[span_339](end_span)
-        f"👤 Username: {uname}\n"  #[span_340](start_span)[span_340](end_span)
-        f"📛 Tên: {db_user.fullname}\n"  #[span_341](start_span)[span_341](end_span)
-        f"💵 Số tiền: <b>{amount:,} VNĐ</b>\n"  #[span_342](start_span)[span_342](end_span)
-        f"🕐 Thời gian: {now_str}\n"  #[span_343](start_span)[span_343](end_span)
-        f"🧾 Mã Bill nạp: #{deposit.id}"  #[span_344](start_span)[span_344](end_span)
+        f"💳 <b>YÊU CẦU NẠP TIỀN</b>\n\n"  
+        f"🆔 ID Telegram: <code>{db_user.telegram_id}</code>\n"  
+        f"👤 Username: {uname}\n"  
+        f"📛 Tên: {db_user.fullname}\n"  
+        f"💵 Số tiền: <b>{amount:,} VNĐ</b>\n"  
+        f"🕐 Thời gian: {now_str}\n"  
+        f"🧾 Mã Bill nạp: #{deposit.id}"  
     )
-    kb = deposit_approval_kb(deposit.id)  #[span_345](start_span)[span_345](end_span)
+    kb = deposit_approval_kb(deposit.id)  
     for admin_id in ADMIN_IDS:
         try:
-            await message.forward(admin_id)  #[span_346](start_span)[span_346](end_span)
-            await bot.send_message(admin_id, caption, parse_mode="HTML", reply_markup=kb)  #[span_347](start_span)[span_347](end_span)
+            await message.forward(admin_id)  
+            await bot.send_message(admin_id, caption, parse_mode="HTML", reply_markup=kb)  
         except Exception: pass
-    await message.answer("✅ <b>Đã gửi bill cho Admin!</b>\n\n Vui lòng đợi trong giây lát hệ thống đang duyệt.", parse_mode="HTML", reply_markup=main_menu_kb())  #[span_348](start_span)[span_348](end_span)
+    await message.answer("✅ <b>Đã gửi bill cho Admin!</b>\n\n Vui lòng đợi trong giây lát hệ thống đang duyệt.", parse_mode="HTML", reply_markup=main_menu_kb())  
 
 @router.message(DepositState.waiting_bill, ~F.text.in_(MENU_BUTTONS))
 async def deposit_bill_invalid(message: Message):
-    await message.answer("⚠️ Vui lòng gửi hình ảnh hóa đơn giao dịch.")  #[span_349](start_span)[span_349](end_span)
+    await message.answer("⚠️ Vui lòng gửi hình ảnh hóa đơn giao dịch.")  
 
-@router.callback_query(F.data.startswith("approve_deposit:"))
+@router.message(F.data.startswith("approve_deposit:"))
 async def cb_approve_deposit(callback: CallbackQuery, bot: Bot, is_admin: bool, db_session):
-    if not is_admin: await callback.answer("❌ Bạn không có quyền.", show_alert=True); return  #[span_350](start_span)[span_350](end_span)
-    deposit_id = int(callback.data.split(":")[1])  #[span_351](start_span)[span_351](end_span)
-    deposit = await approve_deposit(db_session, deposit_id, callback.from_user.id)  #[span_352](start_span)[span_352](end_span)
-    if deposit is None: await callback.answer("⚠️ Bill không tồn tại hoặc đã xử lý trước đó.", show_alert=True); return  #[span_353](start_span)[span_353](end_span)
-    user_after = await add_balance(db_session, deposit.user_id, deposit.amount)  #[span_354](start_span)[span_354](end_span)
-    user_tg_id = deposit.user.telegram_id if deposit.user else None  #[span_355](start_span)[span_355](end_span)
-    await callback.message.edit_reply_markup(reply_markup=None)  #[span_356](start_span)[span_356](end_span)
-    await callback.message.reply(f"✅ Đã duyệt nạp tiền thành công <b>{deposit.amount:,} VNĐ</b> cho đơn #{deposit_id}", parse_mode="HTML")  #[span_357](start_span)[span_357](end_span)
+    if not is_admin: await callback.answer("❌ Bạn không có quyền.", show_alert=True); return  
+    deposit_id = int(callback.data.split(":")[1])  
+    deposit = await approve_deposit(db_session, deposit_id, callback.from_user.id)  
+    if deposit is None: await callback.answer("⚠️ Bill không tồn tại hoặc đã xử lý trước đó.", show_alert=True); return  
+    user_after = await add_balance(db_session, deposit.user_id, deposit.amount)  
+    user_tg_id = deposit.user.telegram_id if deposit.user else None  
+    await callback.message.edit_reply_markup(reply_markup=None)  
+    await callback.message.reply(f"✅ Đã duyệt nạp tiền thành công <b>{deposit.amount:,} VNĐ</b> cho đơn #{deposit_id}", parse_mode="HTML")  
     if user_tg_id:
-        try: await bot.send_message(user_tg_id, f"✅ <b>Nạp tiền thành công!</b>\n\n💵 Cộng: <b>{deposit.amount:,} VNĐ</b>\n💰 Số dư ví VNĐ: <b>{user_after.balance:,} VNĐ</b>", parse_mode="HTML")  #[span_358](start_span)[span_358](end_span)
+        try: await bot.send_message(user_tg_id, f"✅ <b>Nạp tiền thành công!</b>\n\n💵 Cộng: <b>{deposit.amount:,} VNĐ</b>\n💰 Số dư ví VNĐ: <b>{user_after.balance:,} VNĐ</b>", parse_mode="HTML")  
         except Exception: pass
-    await callback.answer("✅ Hoàn tất!")  #[span_359](start_span)[span_359](end_span)
+    await callback.answer("✅ Hoàn tất!")  
 
-@router.callback_query(F.data.startswith("reject_deposit:"))
+@router.message(F.data.startswith("reject_deposit:"))
 async def cb_reject_deposit(callback: CallbackQuery, bot: Bot, is_admin: bool, db_session):
-    if not is_admin: await callback.answer("❌ Bạn không có quyền.", show_alert=True); return  #[span_360](start_span)[span_360](end_span)
-    deposit_id = int(callback.data.split(":")[1])  #[span_361](start_span)[span_361](end_span)
-    deposit = await reject_deposit(db_session, deposit_id, callback.from_user.id)  #[span_362](start_span)[span_362](end_span)
-    if deposit is None: await callback.answer("⚠️ Bill không tồn tại hoặc đã xử lý.", show_alert=True); return  #[span_363](start_span)[span_363](end_span)
-    user_tg_id = deposit.user.telegram_id if deposit.user else None  #[span_364](start_span)[span_364](end_span)
-    await callback.message.edit_reply_markup(reply_markup=None)  #[span_365](start_span)[span_365](end_span)
-    await callback.message.reply(f"❌ Đã từ chối đơn nạp #{deposit_id}", parse_mode="HTML")  #[span_366](start_span)[span_366](end_span)
+    if not is_admin: await callback.answer("❌ Bạn không có quyền.", show_alert=True); return  
+    deposit_id = int(callback.data.split(":")[1])  
+    deposit = await reject_deposit(db_session, deposit_id, callback.from_user.id)  
+    if deposit is None: await callback.answer("⚠️ Bill không tồn tại hoặc đã xử lý.", show_alert=True); return  
+    user_tg_id = deposit.user.telegram_id if deposit.user else None  
+    await callback.message.edit_reply_markup(reply_markup=None)  
+    await callback.message.reply(f"❌ Đã từ chối đơn nạp #{deposit_id}", parse_mode="HTML")  
     if user_tg_id:
-        try: await bot.send_message(user_tg_id, f"❌ <b>Đơn nạp tiền bị từ chối!</b>\n\n💵 Số tiền: <b>{deposit.amount:,} VNĐ</b>\nVui lòng kiểm tra lại hình ảnh hóa đơn.", parse_mode="HTML")  #[span_367](start_span)[span_367](end_span)
+        try: await bot.send_message(user_tg_id, f"❌ <b>Đơn nạp tiền bị từ chối!</b>\n\n💵 Số tiền: <b>{deposit.amount:,} VNĐ</b>\nVui lòng kiểm tra lại hình ảnh hóa đơn.", parse_mode="HTML")  
         except Exception: pass
-    await callback.answer("❌ Đã từ chối!")  #[span_368](start_span)[span_368](end_span)
+    await callback.answer("❌ Đã từ chối!")  
 
 # ── Mini Game Tài Xỉu (Xanh Chín 100% - Tung Đồng Thời Realtime) ───────────────
 @router.message(lambda m: m.text == "🎲 Chơi Tài Xỉu")
@@ -811,8 +838,6 @@ async def tx_start_menu(message: Message, state: FSMContext, db_user: User):
         f"🎲 <b>MINI GAME TÀI XỈU</b> 🎲\n\n"
         f"💳 Ví xu hiện tại: <b>{db_user.xu:,} xu</b>\n\n"
         f"Luật chơi: Tổng 3 xúc xắc từ 3-10 là Xỉu, từ 11-18 là Tài.\n"
-        f"Hãy chọn cửa cược dưới đây:",
-        f"Luật chơi: Tổng 3 xúc xắc từ 3-10 là Xỉu, từ 11-18 là Tài.[span_369](start_span)[span_369](end_span)\n"
         f"Hãy chọn cửa cược dưới đây:",
         parse_mode="HTML", reply_markup=tai_xiu_inline_kb()
     )
@@ -851,7 +876,6 @@ async def tx_process_bet(message: Message, state: FSMContext, db_session, db_use
 
     await message.answer("🎲 Đang lắc xúc xắc đồng thời...")
 
-    # Kích hoạt tung 3 xúc xắc chuyển động CÙNG MỘT LÚC (Async)[span_370](start_span)[span_370](end_span)
     dice_results = await asyncio.gather(
         bot.send_dice(chat_id=message.chat.id, emoji="🎲"),
         bot.send_dice(chat_id=message.chat.id, emoji="🎲"),
@@ -866,7 +890,6 @@ async def tx_process_bet(message: Message, state: FSMContext, db_session, db_use
     ket_qua = "tai" if tong >= 11 else "xiu"
     ket_qua_text = "🔴 TÀI" if ket_qua == "tai" else "🔵 XỈU"
 
-    # Chờ 3.5 giây đồ họa quay dừng hẳn[span_371](start_span)[span_371](end_span)
     await asyncio.sleep(3.5)
 
     if chosen_side == ket_qua:
@@ -917,7 +940,6 @@ async def cmd_tx_fast(message: Message, db_session, db_user: User, bot: Bot):
 
     await message.answer("🎲 Đang lắc lệnh nhanh...")
 
-    # Kích hoạt tung 3 xúc xắc chuyển động CÙNG MỘT LÚC (Async)[span_372](start_span)[span_372](end_span)
     dice_results = await asyncio.gather(
         bot.send_dice(chat_id=message.chat.id, emoji="🎲"),
         bot.send_dice(chat_id=message.chat.id, emoji="🎲"),
@@ -932,7 +954,7 @@ async def cmd_tx_fast(message: Message, db_session, db_user: User, bot: Bot):
     ket_qua = "tai" if tong >= 11 else "xiu"
     ket_qua_text = "🔴 TÀI" if ket_qua == "tai" else "🔵 XỈU"
 
-    await asyncio.sleep(3.5)  #[span_373](start_span)[span_373](end_span)
+    await asyncio.sleep(3.5)  
 
     if cua_dat == ket_qua:
         user.xu += bet
@@ -1099,119 +1121,119 @@ async def giftcode_redeem(message: Message, state: FSMContext, db_session, db_us
 # ── Admin Panel ───────────────────────────────────────────────────────────────
 @router.message(Command("admin"))
 async def cmd_admin(message: Message, is_admin: bool):
-    if not is_admin: await message.answer("❌ Bạn không có quyền."); return  #[span_374](start_span)[span_374](end_span)
-    await message.answer("🔐 <b>HỆ THỐNG ĐIỀU HÀNH ADMIN</b>", parse_mode="HTML", reply_markup=admin_menu_kb())  #[span_375](start_span)[span_375](end_span)
+    if not is_admin: await message.answer("❌ Bạn không có quyền."); return  
+    await message.answer("🔐 <b>HỆ THỐNG ĐIỀU HÀNH ADMIN</b>", parse_mode="HTML", reply_markup=admin_menu_kb())  
 
 @router.message(lambda m: m.text == "🔙 Menu Chính")
 async def back_to_main(message: Message):
-    await message.answer("🏠 Quay về Menu chính", reply_markup=main_menu_kb())  #[span_376](start_span)[span_376](end_span)
+    await message.answer("🏠 Quay về Menu chính", reply_markup=main_menu_kb())  
 
 @router.message(lambda m: m.text == "📊 Dashboard")
 @admin_only
 async def admin_dashboard(message: Message, is_admin: bool, db_session):
-    t_acc = await get_total_count(db_session)  #[span_377](start_span)[span_377](end_span)
-    a_acc = await get_available_count(db_session)  #[span_378](start_span)[span_378](end_span)
-    s_acc = await get_sold_count(db_session)  #[span_379](start_span)[span_379](end_span)
-    orders = await get_all_orders(db_session, 9999)  #[span_380](start_span)[span_380](end_span)
-    users = await get_all_users(db_session)  #[span_381](start_span)[span_381](end_span)
-    bills = await get_pending_deposits(db_session)  #[span_382](start_span)[span_382](end_span)
+    t_acc = await get_total_count(db_session)  
+    a_acc = await get_available_count(db_session)  
+    s_acc = await get_sold_count(db_session)  
+    orders = await get_all_orders(db_session, 9999)  
+    users = await get_all_users(db_session)  
+    bills = await get_pending_deposits(db_session)  
     await message.answer(
-        f"📊 <b>DASHBOARD HỆ THỐNG</b>\n\n"  #[span_383](start_span)[span_383](end_span)
-        f"👥 Tổng người dùng: <b>{len(users)}</b>\n"  #[span_384](start_span)[span_384](end_span)
-        f"📦 Tổng acc trong kho: <b>{t_acc}</b>\n"  #[span_385](start_span)[span_385](end_span)
-        f"✅ Acc chưa bán: <b>{a_acc}</b>\n"  #[span_386](start_span)[span_386](end_span)
-        f"🔴 Acc đã bán: <b>{s_acc}</b>\n"  #[span_387](start_span)[span_387](end_span)
-        f"🧾 Tổng số đơn: <b>{len(orders)}</b>\n"  #[span_388](start_span)[span_388](end_span)
-        f"💰 Doanh thu VNĐ: <b>{sum(o.price for o in orders):,} VNĐ</b>\n"  #[span_389](start_span)[span_389](end_span)
-        f"⏳ Hoá đơn chờ duyệt: <b>{len(bills)}</b>",  #[span_390](start_span)[span_390](end_span)
+        f"📊 <b>DASHBOARD HỆ THỐNG</b>\n\n"  
+        f"👥 Tổng người dùng: <b>{len(users)}</b>\n"  
+        f"📦 Tổng acc trong kho: <b>{t_acc}</b>\n"  
+        f"✅ Acc chưa bán: <b>{a_acc}</b>\n"  
+        f"🔴 Acc đã bán: <b>{s_acc}</b>\n"  
+        f"🧾 Tổng số đơn: <b>{len(orders)}</b>\n"  
+        f"💰 Doanh thu VNĐ: <b>{sum(o.price for o in orders):,} VNĐ</b>\n"  
+        f"⏳ Hoá đơn chờ duyệt: <b>{len(bills)}</b>",  
         parse_mode="HTML"
     )
 
 @router.message(lambda m: m.text == "📦 Xem Kho")
 @admin_only
 async def admin_view_stock(message: Message, is_admin: bool, db_session):
-    t = await get_total_count(db_session)  #[span_391](start_span)[span_391](end_span)
-    a = await get_available_count(db_session)  #[span_392](start_span)[span_392](end_span)
-    s = await get_sold_count(db_session)  #[span_393](start_span)[span_393](end_span)
-    await message.answer(f"📦 <b>Trạng Thái Kho</b>\n\n📊 Tổng: <b>{t}</b>\n✅ Chưa bán: <b>{a}</b>\n🔴 Đã bán: <b>{s}</b>", parse_mode="HTML")  #[span_394](start_span)[span_394](end_span)
+    t = await get_total_count(db_session)  
+    a = await get_available_count(db_session)  
+    s = await get_sold_count(db_session)  
+    await message.answer(f"📦 <b>Trạng Thái Kho</b>\n\n📊 Tổng: <b>{t}</b>\n✅ Chưa bán: <b>{a}</b>\n🔴 Đã bán: <b>{s}</b>", parse_mode="HTML")  
 
 @router.message(lambda m: m.text == "📊 Thống Kê")
 @admin_only
 async def admin_stats(message: Message, is_admin: bool, db_session):
-    orders = await get_all_orders(db_session, 9999)  #[span_395](start_span)[span_395](end_span)
-    users = await get_all_users(db_session)  #[span_396](start_span)[span_396](end_span)
-    t = await get_total_count(db_session)  #[span_397](start_span)[span_397](end_span)
-    a = await get_available_count(db_session)  #[span_398](start_span)[span_398](end_span)
-    s = await get_sold_count(db_session)  #[span_399](start_span)[span_399](end_span)
+    orders = await get_all_orders(db_session, 9999)  
+    users = await get_all_users(db_session)  
+    t = await get_total_count(db_session)  
+    a = await get_available_count(db_session)  
+    s = await get_sold_count(db_session)  
     await message.answer(
-        f"📊 <b>Thống Kê Vận Hành</b>\n\n👥 Tổng User: <b>{len(users)}</b>\n📦 Tổng Acc: <b>{t}</b>\n✅ Còn: <b>{a}</b>\n🔴 Đã bán: <b>{s}</b>\n🧾 Tổng đơn: <b>{len(orders)}</b>\n💰 Tổng doanh thu: <b>{sum(o.price for o in orders):,} VNĐ</b>",  #[span_400](start_span)[span_400](end_span)
+        f"📊 <b>Thống Kê Vận Hành</b>\n\n👥 Tổng User: <b>{len(users)}</b>\n📦 Tổng Acc: <b>{t}</b>\n✅ Còn: <b>{a}</b>\n🔴 Đã bán: <b>{s}</b>\n🧾 Tổng đơn: <b>{len(orders)}</b>\n💰 Tổng doanh thu: <b>{sum(o.price for o in orders):,} VNĐ</b>",  
         parse_mode="HTML"
     )
 
 @router.message(lambda m: m.text == "📥 Import TXT")
 @admin_only
 async def admin_import_start(message: Message, state: FSMContext, is_admin: bool):
-    await message.answer("📥 Vui lòng gửi file `.TXT` chứa tài khoản.\n\nĐịnh dạng mỗi dòng: <code>username|password</code>", parse_mode="HTML")  #[span_401](start_span)[span_401](end_span)
-    await state.set_state(AdminStates.waiting_import_file)  #[span_402](start_span)[span_402](end_span)
+    await message.answer("📥 Vui lòng gửi file `.TXT` chứa tài khoản.\n\nĐịnh dạng mỗi dòng: <code>username|password</code>", parse_mode="HTML")  
+    await state.set_state(AdminStates.waiting_import_file)  
 
 @router.message(AdminStates.waiting_import_file, F.document)
 async def admin_import_file(message: Message, state: FSMContext, bot: Bot, db_session):
-    doc = message.document  #[span_403](start_span)[span_403](end_span)
+    doc = message.document  
     if not doc or not doc.file_name or not doc.file_name.endswith(".txt"):
-        await message.answer("⚠️ File gửi lên phải có định dạng đuôi `.txt`!")  #[span_404](start_span)[span_404](end_span)
+        await message.answer("⚠️ File gửi lên phải có định dạng đuôi `.txt`!")  
         return
-    await state.clear()  #[span_405](start_span)[span_405](end_span)
-    file = await bot.get_file(doc.file_id)  #[span_406](start_span)[span_406](end_span)
-    raw = await bot.download_file(file.file_path)  #[span_407](start_span)[span_407](end_span)
-    content = raw.read().decode("utf-8", errors="ignore")  #[span_408](start_span)[span_408](end_span)
-    stats = await import_accounts(db_session, content.splitlines())  #[span_409](start_span)[span_409](end_span)
-    await message.answer(f"📥 <b>KẾT QUẢ IMPORT KHO ACC</b>\n\n📄 Tổng dòng: <b>{stats['total']}</b>\n✅ Đã thêm thành công: <b>{stats['imported']}</b>\n🔁 Bị trùng: <b>{stats['duplicates']}</b>\n❌ Lỗi định dạng: <b>{stats['invalid']}</b>", parse_mode="HTML")  #[span_410](start_span)[span_410](end_span)
+    await state.clear()  
+    file = await bot.get_file(doc.file_id)  
+    raw = await bot.download_file(file.file_path)  
+    content = raw.read().decode("utf-8", errors="ignore")  
+    stats = await import_accounts(db_session, content.splitlines())  
+    await message.answer(f"📥 <b>KẾT QUẢ IMPORT KHO ACC</b>\n\n📄 Tổng dòng: <b>{stats['total']}</b>\n✅ Đã thêm thành công: <b>{stats['imported']}</b>\n🔁 Bị trùng: <b>{stats['duplicates']}</b>\n❌ Lỗi định dạng: <b>{stats['invalid']}</b>", parse_mode="HTML")  
 
 @router.message(lambda m: m.text == "💰 Cộng Tiền")
 @admin_only
 async def admin_add_bal_start(message: Message, state: FSMContext, is_admin: bool):
-    await message.answer("💰 Nhập Telegram ID người nhận tiền VNĐ:")  #[span_411](start_span)[span_411](end_span)
-    await state.set_state(AdminStates.waiting_add_balance_id)  #[span_412](start_span)[span_412](end_span)
+    await message.answer("💰 Nhập Telegram ID người nhận tiền VNĐ:")  
+    await state.set_state(AdminStates.waiting_add_balance_id)  
 
 @router.message(AdminStates.waiting_add_balance_id)
 async def admin_add_bal_id(message: Message, state: FSMContext):
-    t = (message.text or "").strip()  #[span_413](start_span)[span_413](end_span)
-    if not t.lstrip("-").isdigit(): await message.answer("⚠️ Telegram ID phải là số."); return  #[span_414](start_span)[span_414](end_span)
-    await state.update_data(target_id=int(t))  #[span_415](start_span)[span_415](end_span)
-    await message.answer("💵 Nhập số tiền VNĐ cần cộng thêm:")  #[span_416](start_span)[span_416](end_span)
-    await state.set_state(AdminStates.waiting_add_balance_amount)  #[span_417](start_span)[span_417](end_span)
+    t = (message.text or "").strip()  
+    if not t.lstrip("-").isdigit(): await message.answer("⚠️ Telegram ID phải là số."); return  
+    await state.update_data(target_id=int(t))  
+    await message.answer("💵 Nhập số tiền VNĐ cần cộng thêm:")  
+    await state.set_state(AdminStates.waiting_add_balance_amount)  
 
 @router.message(AdminStates.waiting_add_balance_amount)
 async def admin_add_bal_amount(message: Message, state: FSMContext, db_session):
-    t = (message.text or "").replace(",", "").strip()  #[span_418](start_span)[span_418](end_span)
-    if not t.isdigit() or int(t) <= 0: await message.answer("⚠️ Số tiền không hợp lệ."); return  #[span_419](start_span)[span_419](end_span)
-    amt = int(t); data = await state.get_data(); tid = data["target_id"]; await state.clear()  #[span_420](start_span)[span_420](end_span)
-    user = await adjust_balance_by_telegram_id(db_session, tid, amt)  #[span_421](start_span)[span_421](end_span)
-    if user is None: await message.answer(f"❌ Không tìm thấy User ID {tid} trong hệ thống."); return  #[span_422](start_span)[span_422](end_span)
-    await message.answer(f"✅ Đã cộng <b>{amt:,} VNĐ</b> cho <b>{user.fullname}</b>\n💰 Số dư VNĐ mới: <b>{user.balance:,} VNĐ</b>", parse_mode="HTML")  #[span_423](start_span)[span_423](end_span)
+    t = (message.text or "").replace(",", "").strip()  
+    if not t.isdigit() or int(t) <= 0: await message.answer("⚠️ Số tiền không hợp lệ."); return  
+    amt = int(t); data = await state.get_data(); tid = data["target_id"]; await state.clear()  
+    user = await adjust_balance_by_telegram_id(db_session, tid, amt)  
+    if user is None: await message.answer(f"❌ Không tìm thấy User ID {tid} trong hệ thống."); return  
+    await message.answer(f"✅ Đã cộng <b>{amt:,} VNĐ</b> cho <b>{user.fullname}</b>\n💰 Số dư VNĐ mới: <b>{user.balance:,} VNĐ</b>", parse_mode="HTML")  
 
 @router.message(lambda m: m.text == "💸 Trừ Tiền")
 @admin_only
 async def admin_sub_bal_start(message: Message, state: FSMContext, is_admin: bool):
-    await message.answer("💸 Nhập Telegram ID người cần trừ tiền VNĐ:")  #[span_424](start_span)[span_424](end_span)
-    await state.set_state(AdminStates.waiting_subtract_balance_id)  #[span_425](start_span)[span_425](end_span)
+    await message.answer("💸 Nhập Telegram ID người cần trừ tiền VNĐ:")  
+    await state.set_state(AdminStates.waiting_subtract_balance_id)  
 
 @router.message(AdminStates.waiting_subtract_balance_id)
 async def admin_sub_bal_id(message: Message, state: FSMContext):
-    t = (message.text or "").strip()  #[span_426](start_span)[span_426](end_span)
-    if not t.lstrip("-").isdigit(): await message.answer("⚠️ Telegram ID không hợp lệ."); return  #[span_427](start_span)[span_427](end_span)
-    await state.update_data(target_id=int(t))  #[span_428](start_span)[span_428](end_span)
-    await message.answer("💵 Nhập số tiền VNĐ cần trừ bớt:")  #[span_429](start_span)[span_429](end_span)
-    await state.set_state(AdminStates.waiting_subtract_balance_amount)  #[span_430](start_span)[span_430](end_span)
+    t = (message.text or "").strip()  
+    if not t.lstrip("-").isdigit(): await message.answer("⚠️ Telegram ID không hợp lệ."); return  
+    await state.update_data(target_id=int(t))  
+    await message.answer("💵 Nhập số tiền VNĐ cần trừ bớt:")  
+    await state.set_state(AdminStates.waiting_subtract_balance_amount)  
 
 @router.message(AdminStates.waiting_subtract_balance_amount)
 async def admin_sub_bal_amount(message: Message, state: FSMContext, db_session):
-    t = (message.text or "").replace(",", "").strip()  #[span_431](start_span)[span_431](end_span)
-    if not t.isdigit() or int(t) <= 0: await message.answer("⚠️ Số tiền không hợp lệ."); return  #[span_432](start_span)[span_432](end_span)
-    amt = int(t); data = await state.get_data(); tid = data["target_id"]; await state.clear()  #[span_433](start_span)[span_433](end_span)
-    user = await adjust_balance_by_telegram_id(db_session, tid, -amt)  #[span_434](start_span)[span_434](end_span)
-    if user is None: await message.answer(f"❌ Không tìm thấy User ID {tid}"); return  #[span_435](start_span)[span_435](end_span)
-    await message.answer(f"✅ Đã trừ <b>{amt:,} VNĐ</b> khỏi <b>{user.fullname}</b>\n💰 Số dư VNĐ mới: <b>{user.balance:,} VNĐ</b>", parse_mode="HTML")  #[span_436](start_span)[span_436](end_span)
+    t = (message.text or "").replace(",", "").strip()  
+    if not t.isdigit() or int(t) <= 0: await message.answer("⚠️ Số tiền không hợp lệ."); return  
+    amt = int(t); data = await state.get_data(); tid = data["target_id"]; await state.clear()  
+    user = await adjust_balance_by_telegram_id(db_session, tid, -amt)  
+    if user is None: await message.answer(f"❌ Không tìm thấy User ID {tid}"); return  
+    await message.answer(f"✅ Đã trừ <b>{amt:,} VNĐ</b> khỏi <b>{user.fullname}</b>\n💰 Số dư VNĐ mới: <b>{user.balance:,} VNĐ</b>", parse_mode="HTML")  
 
 @router.message(lambda m: m.text == "🪙 Cộng Xu")
 @admin_only
@@ -1308,131 +1330,131 @@ async def admin_list_codes(message: Message, is_admin: bool, db_session):
 @router.message(lambda m: m.text == "📷 Đổi QR")
 @admin_only
 async def admin_change_qr_start(message: Message, state: FSMContext, is_admin: bool):
-    await message.answer("📷 Vui lòng gửi ảnh mã QR nạp tiền mới lên đây:")  #[span_437](start_span)[span_437](end_span)
-    await state.set_state(AdminStates.waiting_qr)  #[span_438](start_span)[span_438](end_span)
+    await message.answer("📷 Vui lòng gửi ảnh mã QR nạp tiền mới lên đây:")  
+    await state.set_state(AdminStates.waiting_qr)  
 
 @router.message(AdminStates.waiting_qr, F.photo)
 async def admin_receive_qr(message: Message, state: FSMContext, bot: Bot):
-    photo = message.photo[-1]; file = await bot.get_file(photo.file_id); raw = await bot.download_file(file.file_path)  #[span_439](start_span)[span_439](end_span)
-    await save_qr_image(raw.read())  #[span_440](start_span)[span_440](end_span)
-    await state.clear()  #[span_441](start_span)[span_441](end_span)
-    await message.answer("✅ Ảnh QR nạp tiền đã cập nhật thành công!")  #[span_442](start_span)[span_442](end_span)
+    photo = message.photo[-1]; file = await bot.get_file(photo.file_id); raw = await bot.download_file(file.file_path)  
+    await save_qr_image(raw.read())  
+    await state.clear()  
+    await message.answer("✅ Ảnh QR nạp tiền đã cập nhật thành công!")  
 
 @router.message(lambda m: m.text == "📥 Bill Chờ")
 @admin_only
 async def admin_pending_bills(message: Message, is_admin: bool, db_session):
-    deposits = await get_pending_deposits(db_session)  #[span_443](start_span)[span_443](end_span)
-    if not deposits: await message.answer("✅ Không có yêu cầu nạp tiền nào đang xếp hàng."); return  #[span_444](start_span)[span_444](end_span)
-    lines = [f"📥 <b>Yêu Cầu Chờ Duyệt ({len(deposits)})</b>\n"]  #[span_445](start_span)[span_445](end_span)
+    deposits = await get_pending_deposits(db_session)  
+    if not deposits: await message.answer("✅ Không có yêu cầu nạp tiền nào đang xếp hàng."); return  
+    lines = [f"📥 <b>Yêu Cầu Chờ Duyệt ({len(deposits)})</b>\n"]  
     for d in deposits:
-        uname = f"@{d.user.username}" if d.user and d.user.username else "N/A"  #[span_446](start_span)[span_446](end_span)
-        name = d.user.fullname if d.user else "N/A"  #[span_447](start_span)[span_447](end_span)
-        created = d.created_at.strftime("%d/%m/%Y %H:%M") if d.created_at else "N/A"  #[span_448](start_span)[span_448](end_span)
-        lines.append(f"🧾 ID #{d.id} — {name} ({uname})\n   💵 {d.amount:,} VNĐ — {created}")  #[span_449](start_span)[span_449](end_span)
-    await message.answer("\n".join(lines), parse_mode="HTML")  #[span_450](start_span)[span_450](end_span)
+        uname = f"@{d.user.username}" if d.user and d.user.username else "N/A"  
+        name = d.user.fullname if d.user else "N/A"  
+        created = d.created_at.strftime("%d/%m/%Y %H:%M") if d.created_at else "N/A"  
+        lines.append(f"🧾 ID #{d.id} — {name} ({uname})\n   💵 {d.amount:,} VNĐ — {created}")  
+    await message.answer("\n".join(lines), parse_mode="HTML")  
 
 @router.message(lambda m: m.text == "📢 Broadcast")
 @admin_only
 async def admin_broadcast_start(message: Message, state: FSMContext, is_admin: bool):
-    await message.answer("📢 Nhập nội dung tin nhắn bạn muốn gửi cho toàn bộ người chơi:")  #[span_451](start_span)[span_451](end_span)
-    await state.set_state(AdminStates.waiting_broadcast_text)  #[span_452](start_span)[span_452](end_span)
+    await message.answer("📢 Nhập nội dung tin nhắn bạn muốn gửi cho toàn bộ người chơi:")  
+    await state.set_state(AdminStates.waiting_broadcast_text)  
 
 @router.message(AdminStates.waiting_broadcast_text)
 async def admin_broadcast_send(message: Message, state: FSMContext, bot: Bot, db_session):
-    text = message.text or ""; await state.clear()  #[span_453](start_span)[span_453](end_span)
-    if not text: await message.answer("⚠️ Nội dung trống."); return  #[span_454](start_span)[span_454](end_span)
-    users = await get_all_users(db_session)  #[span_455](start_span)[span_455](end_span)
-    sent = failed = 0  #[span_456](start_span)[span_456](end_span)
+    text = message.text or ""; await state.clear()  
+    if not text: await message.answer("⚠️ Nội dung trống."); return  
+    users = await get_all_users(db_session)  
+    sent = failed = 0  
     for u in users:
-        if u.is_banned: continue  #[span_457](start_span)[span_457](end_span)
-        try: await bot.send_message(u.telegram_id, text, parse_mode="HTML"); sent += 1  #[span_458](start_span)[span_458](end_span)
-        except Exception: failed += 1  #[span_459](start_span)[span_459](end_span)
-    await message.answer(f"📢 <b>Gửi Broadcast Hoàn Tất</b>\n\n✅ Thành công: <b>{sent}</b>\n❌ Thất bại: <b>{failed}</b>", parse_mode="HTML")  #[span_460](start_span)[span_460](end_span)
+        if u.is_banned: continue  
+        try: await bot.send_message(u.telegram_id, text, parse_mode="HTML"); sent += 1  
+        except Exception: failed += 1  
+    await message.answer(f"📢 <b>Gửi Broadcast Hoàn Tất</b>\n\n✅ Thành công: <b>{sent}</b>\n❌ Thất bại: <b>{failed}</b>", parse_mode="HTML")  
 
 @router.message(lambda m: m.text == "🚫 Ban User")
 @admin_only
 async def admin_ban_start(message: Message, state: FSMContext, is_admin: bool):
-    await message.answer("🚫 Nhập Telegram ID người cần cấm sử dụng bot:")  #[span_461](start_span)[span_461](end_span)
-    await state.set_state(AdminStates.waiting_ban_id)  #[span_462](start_span)[span_462](end_span)
+    await message.answer("🚫 Nhập Telegram ID người cần cấm sử dụng bot:")  
+    await state.set_state(AdminStates.waiting_ban_id)  
 
 @router.message(AdminStates.waiting_ban_id)
 async def admin_ban_execute(message: Message, state: FSMContext, db_session):
-    t = (message.text or "").strip(); await state.clear()  #[span_463](start_span)[span_463](end_span)
-    if not t.lstrip("-").isdigit(): await message.answer("⚠️ ID sai định dạng."); return  #[span_464](start_span)[span_464](end_span)
-    ok = await ban_user(db_session, int(t))  #[span_465](start_span)[span_465](end_span)
-    await message.answer(f"✅ Đã ban ID <code>{t}</code>." if ok else f"❌ Không thấy ID <code>{t}</code>", parse_mode="HTML")  #[span_466](start_span)[span_466](end_span)
+    t = (message.text or "").strip(); await state.clear()  
+    if not t.lstrip("-").isdigit(): await message.answer("⚠️ ID sai định dạng."); return  
+    ok = await ban_user(db_session, int(t))  
+    await message.answer(f"✅ Đã ban ID <code>{t}</code>." if ok else f"❌ Không thấy ID <code>{t}</code>", parse_mode="HTML")  
 
 @router.message(lambda m: m.text == "✅ Unban User")
 @admin_only
 async def admin_unban_start(message: Message, state: FSMContext, is_admin: bool):
-    await message.answer("✅ Nhập Telegram ID cần mở khóa ban:")  #[span_467](start_span)[span_467](end_span)
-    await state.set_state(AdminStates.waiting_unban_id)  #[span_468](start_span)[span_468](end_span)
+    await message.answer("✅ Nhập Telegram ID cần mở khóa ban:")  
+    await state.set_state(AdminStates.waiting_unban_id)  
 
 @router.message(AdminStates.waiting_unban_id)
 async def admin_unban_execute(message: Message, state: FSMContext, db_session):
-    t = (message.text or "").strip(); await state.clear()  #[span_469](start_span)[span_469](end_span)
-    if not t.lstrip("-").isdigit(): await message.answer("⚠️ ID sai."); return  #[span_470](start_span)[span_470](end_span)
-    ok = await unban_user(db_session, int(t))  #[span_471](start_span)[span_471](end_span)
-    await message.answer(f"✅ Đã gỡ ban ID <code>{t}</code>." if ok else f"❌ Không thấy ID <code>{t}</code>", parse_mode="HTML")  #[span_472](start_span)[span_472](end_span)
+    t = (message.text or "").strip(); await state.clear()  
+    if not t.lstrip("-").isdigit(): await message.answer("⚠️ ID sai."); return  
+    ok = await unban_user(db_session, int(t))  
+    await message.answer(f"✅ Đã gỡ ban ID <code>{t}</code>." if ok else f"❌ Không thấy ID <code>{t}</code>", parse_mode="HTML")  
 
 @router.message(lambda m: m.text == "🗑 Xóa Account")
 @admin_only
 async def admin_delete_acc_start(message: Message, state: FSMContext, is_admin: bool):
-    await message.answer("🗑 Nhập tên tài khoản game (username) cần xoá khỏi kho:")  #[span_473](start_span)[span_473](end_span)
-    await state.set_state(AdminStates.waiting_delete_username)  #[span_474](start_span)[span_474](end_span)
+    await message.answer("🗑 Nhập tên tài khoản game (username) cần xoá khỏi kho:")  
+    await state.set_state(AdminStates.waiting_delete_username)  
 
 @router.message(AdminStates.waiting_delete_username)
 async def admin_delete_acc_execute(message: Message, state: FSMContext, db_session):
-    uname = (message.text or "").strip(); await state.clear()  #[span_475](start_span)[span_475](end_span)
-    ok = await delete_account_by_username(db_session, uname)  #[span_476](start_span)[span_476](end_span)
-    await message.answer(f"✅ Đã xóa acc <code>{uname}</code> khỏi hệ thống." if ok else f"❌ Không thấy acc có tên <code>{uname}</code>", parse_mode="HTML")  #[span_477](start_span)[span_477](end_span)
+    uname = (message.text or "").strip(); await state.clear()  
+    ok = await delete_account_by_username(db_session, uname)  
+    await message.answer(f"✅ Đã xóa acc <code>{uname}</code> khỏi hệ thống." if ok else f"❌ Không thấy acc có tên <code>{uname}</code>", parse_mode="HTML")  
 
 @router.message(lambda m: m.text == "📤 Export Chưa Bán")
 @admin_only
 async def admin_export_unsold(message: Message, is_admin: bool, db_session):
-    accounts = await get_unsold_accounts(db_session)  #[span_478](start_span)[span_478](end_span)
-    if not accounts: await message.answer(" Kho trống rỗng."); return  #[span_479](start_span)[span_479](end_span)
-    lines = [f"{a.username}|{a.password}" for a in accounts]  #[span_480](start_span)[span_480](end_span)
-    fp = await save_export_file(lines, "unsold")  #[span_481](start_span)[span_481](end_span)
-    await message.answer_document(FSInputFile(fp), caption=f"📤 Acc Chưa Bán\n📊 Số lượng: <b>{len(lines)}</b> acc", parse_mode="HTML")  #[span_482](start_span)[span_482](end_span)
+    accounts = await get_unsold_accounts(db_session)  
+    if not accounts: await message.answer(" Kho trống rỗng."); return  
+    lines = [f"{a.username}|{a.password}" for a in accounts]  
+    fp = await save_export_file(lines, "unsold")  
+    await message.answer_document(FSInputFile(fp), caption=f"📤 Acc Chưa Bán\n📊 Số lượng: <b>{len(lines)}</b> acc", parse_mode="HTML")  
 
 @router.message(lambda m: m.text == "📤 Export Đã Bán")
 @admin_only
 async def admin_export_sold(message: Message, is_admin: bool, db_session):
-    accounts = await get_sold_accounts(db_session)  #[span_483](start_span)[span_483](end_span)
-    if not accounts: await message.answer(" Chưa bán được đơn nào."); return  #[span_484](start_span)[span_484](end_span)
-    lines = [f"{a.username}|{a.password}" for a in accounts]  #[span_485](start_span)[span_485](end_span)
-    fp = await save_export_file(lines, "sold")  #[span_486](start_span)[span_486](end_span)
-    await message.answer_document(FSInputFile(fp), caption=f"📤 Acc Đã Bán\n📊 Số lượng: <b>{len(lines)}</b> acc", parse_mode="HTML")  #[span_487](start_span)[span_487](end_span)
+    accounts = await get_sold_accounts(db_session)  
+    if not accounts: await message.answer(" Chưa bán được đơn nào."); return  
+    lines = [f"{a.username}|{a.password}" for a in accounts]  
+    fp = await save_export_file(lines, "sold")  
+    await message.answer_document(FSInputFile(fp), caption=f"📤 Acc Đã Bán\n📊 Số lượng: <b>{len(lines)}</b> acc", parse_mode="HTML")  
 
 # ── Web Server Mồi Chống Sleep Trên Render ────────────────────────────────────
 async def handle_web(request):
-    return web.Response(text="Bot đang vận hành xanh chín ổn định 24/7!")  #[span_488](start_span)[span_488](end_span)
+    return web.Response(text="Bot đang vận hành xanh chín ổn định 24/7!")  
 
 async def start_web_server():
-    app = web.Application()  #[span_489](start_span)[span_489](end_span)
-    app.router.add_get("/", handle_web)  #[span_490](start_span)[span_490](end_span)
-    runner = web.AppRunner(app)  #[span_491](start_span)[span_491](end_span)
-    await runner.setup()  #[span_492](start_span)[span_492](end_span)
-    port = int(os.environ.get("PORT", 8080))  # Cổng mạng tự động hệ thống Render cấp[span_493](start_span)[span_493](end_span)
-    site = web.TCPSite(runner, "0.0.0.0", port)  #[span_494](start_span)[span_494](end_span)
-    await site.start()  #[span_495](start_span)[span_495](end_span)
+    app = web.Application()  
+    app.router.add_get("/", handle_web)  
+    runner = web.AppRunner(app)  
+    await runner.setup()  
+    port = int(os.environ.get("PORT", 8080))  
+    site = web.TCPSite(runner, "0.0.0.0", port)  
+    await site.start()  
     logger.info(f"✅ Web Server Keep-Alive đang kích hoạt tại Port: {port}")
 
 # ── Tiến Trình Khởi Chạy ──────────────────────────────────────────────────────
 async def main():
-    await init_db()  # Khởi tạo bảng dữ liệu SQLite[span_496](start_span)[span_496](end_span)
-    await start_web_server()  # Khởi chạy cổng Web Service mồi[span_497](start_span)[span_497](end_span)
+    await init_db()  
+    await start_web_server()  
 
-    bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))  #[span_498](start_span)[span_498](end_span)
-    dp = Dispatcher(storage=MemoryStorage())  #[span_499](start_span)[span_499](end_span)
-    dp.message.middleware(AuthMiddleware())  #[span_500](start_span)[span_500](end_span)
-    dp.callback_query.middleware(AuthMiddleware())  #[span_501](start_span)[span_501](end_span)
-    dp.include_router(router)  #[span_502](start_span)[span_502](end_span)
+    bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))  
+    dp = Dispatcher(storage=MemoryStorage())  
+    dp.message.middleware(AuthMiddleware())  
+    dp.callback_query.middleware(AuthMiddleware())  
+    dp.include_router(router)  
 
     logger.info("🤖 Bot Hợp Nhất Đã Sẵn Sàng Trực Tuyến!")
-    try: await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())  #[span_503](start_span)[span_503](end_span)
-    finally: await bot.session.close()  #[span_504](start_span)[span_504](end_span)
+    try: await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())  
+    finally: await bot.session.close()  
 
 if __name__ == "__main__":
-    asyncio.run(main())  #[span_505](start_span)[span_505](end_span)
+    asyncio.run(main())  
