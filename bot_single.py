@@ -131,10 +131,11 @@ class User(Base):
     deposits: Mapped[list["Deposit"]] = relationship("Deposit", back_populates="user")  
 
 class Account(Base):  
-    __tablename__ = "accounts_v3"
+    # Đổi sang v4 và chuyển kiểu dữ liệu username/password sang Text để nuốt trọn chuỗi dài không lo lỗi quá ký tự
+    __tablename__ = "accounts_v4"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)  
-    username: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)  
-    password: Mapped[str] = mapped_column(String(255), nullable=False)  
+    username: Mapped[str] = mapped_column(Text, unique=True, nullable=False, index=True)  
+    password: Mapped[str] = mapped_column(Text, nullable=False)  
     status: Mapped[AccountStatus] = mapped_column(Enum(AccountStatus), nullable=False, default=AccountStatus.available)  
     order_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("orders.id"), nullable=True)  
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())  
@@ -271,7 +272,7 @@ async def mark_accounts_sold(session, accounts, order_id):
         acc.sold_at = now  
     await session.commit()  
 
-# ── Hàm Import Đã Đồng Bộ Hóa Cấu Trúc Nhẹ Nhàng Xanh Chín ─────────────────────
+# ── Hàm Import Đã Được Gia Cố Tối Đa ──────────────────────────────────────────
 async def import_accounts(session, lines):
     stats = {"total": 0, "imported": 0, "duplicates": 0, "invalid": 0}
     
@@ -525,7 +526,7 @@ router = Router()
 # ── Xử lý nút Bot Đang Chạy ───────────────────────────────────────────────────
 @router.message(lambda m: m.text == "🟢 Bot Đang Chạy 24/7")
 async def bot_status_click(message: Message):
-    await message.answer("⚡ <b>Hệ thống trực tuyến!</b>\n Bot vẫn đang vận hành ổn định, xanh chín 24/7 trên máy chủ Render.", parse_mode="HTML")
+    await message.answer("⚡ <b>Hệ thống trực tuyến!</b>\nBot vẫn đang vận hành ổn định, xanh chín 24/7 trên máy chủ Render.", parse_mode="HTML")
 
 # ── /start & home ─────────────────────────────────────────────────────────────
 @router.message(CommandStart())
