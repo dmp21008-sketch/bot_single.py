@@ -1,914 +1,1427 @@
 # ═══════════════════════════════════════════════════════════════
-#  BOT LIÊN QUÂN + TÀI XỈU DYNAMIC - BẢN TƯỜNG MINH KHÔNG VIẾT GỘP
-#  Cài đặt thư viện trên Replit: pip install pyTelegramBotAPI flask
+#  BOT LIÊN QUÂN - ĐÃ FIX LỖI TIMEOUT RENDER WEB SERVICE
+#  Cài thư viện: pip install aiogram==3.13.1 sqlalchemy==2.0.36 aiosqlite==0.20.0 aiofiles==24.1.0 aiohttp
+#  Chạy: python bot_single.py
 # ═══════════════════════════════════════════════════════════════
 
-import os
-import time
-import sqlite3
-import threading
-import random
-import uuid
-import datetime
-from telebot import types
-import telebot
-from flask import Flask
-
-# =======================================================
-# ⚙️ CẤU HÌNH HỆ THỐNG
-# =======================================================
+# ── SỬA 2 DÒNG NÀY TRƯỚC KHI CHẠY ──────────────────────────────
 BOT_TOKEN = "8374524579:AAE2pvVgQqOFnEN2hnhhfRUyopi1B8Dhxcc"
+ADMIN_IDS = [7936179657]  # Telegram ID của admin
+# ────────────────────────────────────────────────────────────────
 
-ADMIN_ID = 7936179657  # ID Telegram của Admin chủ shop
+import asyncio
+import enum
+import functools
+import logging
+import os
+import sys
+import uuid
+from datetime import datetime
+from typing import Any, Awaitable, Callable
 
-ACCOUNT_PRICE = 200      # Giá VNĐ/Điểm cho 1 acc lẻ
-VIP_WEEK_PRICE = 50000   # Giá mua gói VIP Tuần
-VIP_MONTH_PRICE = 100000 # Giá mua gói VIP Tháng
-VIP_DAILY_LIMIT = 100    # Giới hạn nhận acc free mỗi ngày của VIP
-LOW_STOCK_ALERT = 10     # Ngưỡng cảnh báo hết acc gửi cho Admin
+import aiofiles
+from aiohttp import web  # Thêm thư viện mở cổng Web cho Render
+from aiogram import BaseMiddleware, Bot, Dispatcher, F, Router
+from aiogram.client.default import DefaultBotProperties
+from aiogram.enums import ParseMode
+from aiogram.filters import Command, CommandStart
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
+from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.types import (
+    CallbackQuery,
+    FSInputFile,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    KeyboardButton,
+    Message,
+    ReplyKeyboardMarkup,
+    TelegramObject,
+)
+from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    func,
+    select,
+)
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import (
+    DeclarativeBase,
+    Mapped,
+    mapped_column,
+    relationship,
+    selectinload,
+)
 
-CHECKER_LINK = "https://t.me/tretrauchecker_bot?start=ref_7936179657"
-DB_FILE = "database.db"
-QR_IMAGE_PATH = "uploads/qr_current.jpg"
-# =======================================================
+# ── Cấu hình ──────────────────────────────────────────────────────────────────
 
-bot = telebot.TeleBot(BOT_TOKEN)
+ACCOUNT_PRICE = 200  # VNĐ mỗi acc
+MIN_ORDER_QTY = 50  # Số lượng tối thiểu
+CHECKER_LINK = "t.me/tretrauchecker_bot?start=_tgr_8UulJtkyZjE1"
 
-# Đảm bảo thư mục tồn tại để không dính lỗi hệ thống file
-if not os.path.exists("uploads"):
-    os.makedirs("uploads")
-if not os.path.exists("exports"):
-    os.makedirs("exports")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+UPLOADS_DIR = os.path.join(BASE_DIR, "uploads")
+EXPORTS_DIR = os.path.join(BASE_DIR, "exports")
+LOGS_DIR = os.path.join(BASE_DIR, "logs")
+QR_IMAGE_PATH = os.path.join(UPLOADS_DIR, "qr_current.jpg")
+DATABASE_URL = f"sqlite+aiosqlite:///{os.path.join(BASE_DIR, 'database.sqlite')}"
 
-# Bộ nhớ tạm cấu hình Admin giống suộc cũ
-CONFIG = {
-    "xu_diemdanh": 500,
-    "force_result": None
+MENU_BUTTONS = {
+    "🏠 Trang Chủ",
+    "🛒 Mua Acc",
+    "💳 Nạp Tiền",
+    "👤 Tài Khoản",
+    "📦 Đơn Hàng",
+    "☎ Hỗ Trợ",
+    "📊 Dashboard",
+    "📥 Import TXT",
+    "📦 Xem Kho",
+    "📊 Thống Kê",
+    "💰 Cộng Tiền",
+    "💸 Trừ Tiền",
+    "📷 Đổi QR",
+    "📥 Bill Chờ",
+    "📢 Broadcast",
+    "🚫 Ban User",
+    "✅ Unban User",
+    "🗑 Xóa Account",
+    "📤 Export Chưa Bán",
+    "📤 Export Đã Bán",
+    "🔙 Menu Chính",
 }
 
-# Trạng thái hội thoại ngầm cho từng user (FSM)
-user_state = {}
+# ── Logging ───────────────────────────────────────────────────────────────────
 
-# ════════════════════════════════════════════════════════
-# 💾 DATABASE SQLITE - KHỞI TẠO VÀ QUẢN LÝ VĨNH VIỄN
-# ════════════════════════════════════════════════════════
-def get_db_connection():
-    conn = sqlite3.connect(DB_FILE)
-    conn.row_factory = sqlite3.Row
-    return conn
+os.makedirs(LOGS_DIR, exist_ok=True)
+os.makedirs(UPLOADS_DIR, exist_ok=True)
+os.makedirs(EXPORTS_DIR, exist_ok=True)
 
-def init_db():
-    conn = get_db_connection()
-    # Bảng người dùng
-    conn.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            telegram_id INTEGER PRIMARY KEY,
-            username TEXT,
-            fullname TEXT,
-            xu INTEGER DEFAULT 100,
-            vip_until TEXT,
-            last_checkin_date TEXT,
-            vip_claimed_today INTEGER DEFAULT 0,
-            last_vip_claim_date TEXT,
-            referred_by INTEGER
-        )
-    ''')
-    # Bảng kho acc liên quân
-    conn.execute('''
-        CREATE TABLE IF NOT EXISTS accounts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE,
-            password TEXT,
-            status TEXT DEFAULT 'available',
-            sold_at TEXT
-        )
-    ''')
-    # Bảng giftcode
-    conn.execute('''
-        CREATE TABLE IF NOT EXISTS codes (
-            code TEXT PRIMARY KEY,
-            xu INTEGER,
-            luot INTEGER,
-            da_dung TEXT DEFAULT ''
-        )
-    ''')
-    # Bảng đơn hàng mua acc
-    conn.execute('''
-        CREATE TABLE IF NOT EXISTS orders (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            telegram_id INTEGER,
-            quantity INTEGER,
-            price INTEGER,
-            file_name TEXT,
-            created_at TEXT
-        )
-    ''')
-    # Bảng bill chờ nạp tiền
-    conn.execute('''
-        CREATE TABLE IF NOT EXISTS deposits (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            telegram_id INTEGER,
-            amount INTEGER,
-            status TEXT DEFAULT 'pending'
-        )
-    ''')
-    conn.commit()
-    conn.close()
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler(os.path.join(LOGS_DIR, "bot.log"), encoding="utf-8"),
+    ],
+)
+logger = logging.getLogger(__name__)
 
-# Khởi chạy Database
-init_db()
+# ── Database ──────────────────────────────────────────────────────────────────
 
-def get_user(telegram_id, username="User", fullname=""):
-    conn = get_db_connection()
-    user = conn.execute('SELECT * FROM users WHERE telegram_id = ?', (telegram_id,)).fetchone()
-    if not user:
-        conn.execute(
-            'INSERT INTO users (telegram_id, username, fullname) VALUES (?, ?, ?)',
-            (telegram_id, username or f"User_{telegram_id}", fullname or f"User_{telegram_id}")
-        )
-        conn.commit()
-        user = conn.execute('SELECT * FROM users WHERE telegram_id = ?', (telegram_id,)).fetchone()
-    conn.close()
-    return dict(user)
+engine = create_async_engine(DATABASE_URL, echo=False)
+AsyncSessionLocal = async_sessionmaker(
+    engine, class_=AsyncSession, expire_on_commit=False
+)
 
-def update_user_xu(telegram_id, amount):
-    conn = get_db_connection()
-    conn.execute('UPDATE users SET xu = xu + ? WHERE telegram_id = ?', (amount, telegram_id))
-    conn.commit()
-    conn.close()
 
-def kiem_tra_vip(user_id):
-    conn = get_db_connection()
-    user = conn.execute('SELECT vip_until FROM users WHERE telegram_id = ?', (user_id,)).fetchone()
-    conn.close()
-    if user and user['vip_until']:
-        until = datetime.datetime.strptime(user['vip_until'], "%Y-%m-%d %H:%M:%S")
-        if until > datetime.datetime.now():
-            return True
-    return False
+class Base(DeclarativeBase):
+    pass
 
-# ════════════════════════════════════════════════════════
-# ⌨️ HỆ THỐNG GIAO DIỆN BÀN PHÍM (KEYBOARD)
-# ════════════════════════════════════════════════════════
-def menu_chinh(user_id=None):
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    markup.row(types.KeyboardButton("🏠 Trang Chủ"), types.KeyboardButton("🛒 Mua Acc"))
-    markup.row(types.KeyboardButton("💳 Nạp Tiền"), types.KeyboardButton("👤 Tài Khoản"))
-    markup.row(types.KeyboardButton("📦 Đơn Hàng"), types.KeyboardButton("🎁 Free & VIP"))
-    markup.row(types.KeyboardButton("☎ Hỗ Trợ"))
-    if user_id == ADMIN_ID:
-        markup.row(types.KeyboardButton("⚙️ Menu Admin Panel"))
-    return markup
 
-def menu_free_vip():
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    markup.row(types.KeyboardButton("📅 Điểm Danh Nhận Điểm"), types.KeyboardButton("🔗 Link Giới Thiệu"))
-    markup.row(types.KeyboardButton("👑 Nhận Acc VIP Free"), types.KeyboardButton("⚡ Mua Gói VIP"))
-    markup.row(types.KeyboardButton("🔙 Menu Chính"))
-    return markup
+# ── Models ────────────────────────────────────────────────────────────────────
 
-def menu_admin_panel():
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    markup.row(types.KeyboardButton("📊 Dashboard"), types.KeyboardButton("📥 Import TXT"))
-    markup.row(types.KeyboardButton("📦 Xem Kho"), types.KeyboardButton("📷 Đổi QR"))
-    markup.row(types.KeyboardButton("📢 Broadcast"), types.KeyboardButton("🔙 Menu Chính"))
-    return markup
 
-def inline_menu_vip():
-    markup = types.InlineKeyboardMarkup()
-    markup.row(
-        types.InlineKeyboardButton("👑 VIP Tuần (50kđ)", callback_data="buy_vip_week"),
-        types.InlineKeyboardButton("👑 VIP Tháng (100kđ)", callback_data="buy_vip_month")
+class AccountStatus(str, enum.Enum):
+    available = "available"
+    sold = "sold"
+
+
+class OrderStatus(str, enum.Enum):
+    completed = "completed"
+    cancelled = "cancelled"
+
+
+class DepositStatus(str, enum.Enum):
+    pending = "pending"
+    approved = "approved"
+    rejected = "rejected"
+
+
+class User(Base):
+    __tablename__ = "users"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    telegram_id: Mapped[int] = mapped_column(
+        BigInteger, unique=True, nullable=False, index=True
     )
-    return markup
-
-def inline_duyet_bill(deposit_id):
-    markup = types.InlineKeyboardMarkup()
-    markup.row(
-        types.InlineKeyboardButton("✅ DUYỆT", callback_data=f"approve_{deposit_id}"),
-        types.InlineKeyboardButton("❌ TỪ CHỐI", callback_data=f"reject_{deposit_id}")
+    username: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    fullname: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    balance: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    is_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_banned: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now()
     )
-    return markup
+    orders: Mapped[list["Order"]] = relationship("Order", back_populates="user")
+    deposits: Mapped[list["Deposit"]] = relationship("Deposit", back_populates="user")
 
-# ════════════════════════════════════════════════════════
-# ⚡ XỬ LÝ LỆNH TƯƠNG TÁC CHÍNH (/start)
-# ════════════════════════════════════════════════════════
-@bot.message_handler(commands=['start', 'help'])
-def cmd_start(message):
-    user_id = message.from_user.id
-    username = message.from_user.username
-    fullname = message.from_user.full_name
-    
-    # Logic kiểm tra và xử lý link Ref giới thiệu
-    args = message.text.split()
-    if len(args) > 1 and args[1].startswith("ref_"):
-        try:
-            ref_by = int(args[1].split("_")[1])
-            conn = get_db_connection()
-            ex_user = conn.execute('SELECT * FROM users WHERE telegram_id = ?', (user_id,)).fetchone()
-            if not ex_user and ref_by != user_id:
-                conn.execute('UPDATE users SET xu = xu + 5000 WHERE telegram_id = ?', (ref_by,))
-                bot.send_message(
-                    ref_by, 
-                    f"🔔 Người chơi <b>{fullname}</b> vừa tham gia qua link giới thiệu của bạn! Bạn nhận được: +<b>5,000 điểm</b>.", 
-                    parse_mode="HTML"
+
+class Account(Base):
+    __tablename__ = "accounts"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    username: Mapped[str] = mapped_column(
+        String(255), unique=True, nullable=False, index=True
+    )
+    password: Mapped[str] = mapped_column(String(255), nullable=False)
+    status: Mapped[AccountStatus] = mapped_column(
+        Enum(AccountStatus), nullable=False, default=AccountStatus.available
+    )
+    order_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("orders.id"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now()
+    )
+    sold_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    order: Mapped["Order|None"] = relationship("Order", back_populates="accounts")
+
+
+class Order(Base):
+    __tablename__ = "orders"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=False
+    )
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    price: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[OrderStatus] = mapped_column(
+        Enum(OrderStatus), nullable=False, default=OrderStatus.completed
+    )
+    file_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now()
+    )
+    user: Mapped["User"] = relationship("User", back_populates="orders")
+    accounts: Mapped[list["Account"]] = relationship("Account", back_populates="order")
+
+
+class Deposit(Base):
+    __tablename__ = "deposits"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=False
+    )
+    amount: Mapped[int] = mapped_column(Integer, nullable=False)
+    bill_image: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    status: Mapped[DepositStatus] = mapped_column(
+        Enum(DepositStatus), nullable=False, default=DepositStatus.pending
+    )
+    admin_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.now()
+    )
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    user: Mapped["User"] = relationship("User", back_populates="deposits")
+
+
+class Setting(Base):
+    __tablename__ = "settings"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    key: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    value: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+async def init_db() -> None:
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    logger.info("Database initialized")
+
+
+# ── Services ──────────────────────────────────────────────────────────────────
+
+
+async def get_or_create_user(session, telegram_id, username, fullname, is_admin=False):
+    result = await session.execute(select(User).where(User.telegram_id == telegram_id))
+    user = result.scalar_one_or_none()
+    if user is None:
+        user = User(
+            telegram_id=telegram_id,
+            username=username,
+            fullname=fullname,
+            is_admin=is_admin,
+        )
+        session.add(user)
+        await session.commit()
+        await session.refresh(user)
+    else:
+        changed = False
+        if user.username != username:
+            user.username = username
+            changed = True
+        if user.fullname != fullname:
+            user.fullname = fullname
+            changed = True
+        if changed:
+            await session.commit()
+            await session.refresh(user)
+    return user
+
+
+async def get_user_by_telegram_id(session, telegram_id):
+    r = await session.execute(select(User).where(User.telegram_id == telegram_id))
+    return r.scalar_one_or_none()
+
+
+async def get_user_by_id(session, user_id):
+    r = await session.execute(select(User).where(User.id == user_id))
+    return r.scalar_one_or_none()
+
+
+async def add_balance(session, user_id, amount):
+    user = await get_user_by_id(session, user_id)
+    if user is None:
+        return None
+    user.balance += amount
+    await session.commit()
+    await session.refresh(user)
+    return user
+
+
+async def adjust_balance_by_telegram_id(session, telegram_id, amount):
+    user = await get_user_by_telegram_id(session, telegram_id)
+    if user is None:
+        return None
+    user.balance += amount
+    if user.balance < 0:
+        user.balance = 0
+    await session.commit()
+    await session.refresh(user)
+    return user
+
+
+async def ban_user(session, telegram_id):
+    r = await session.execute(select(User).where(User.telegram_id == telegram_id))
+    user = r.scalar_one_or_none()
+    if user is None:
+        return False
+    user.is_banned = True
+    await session.commit()
+    return True
+
+
+async def unban_user(session, telegram_id):
+    r = await session.execute(select(User).where(User.telegram_id == telegram_id))
+    user = r.scalar_one_or_none()
+    if user is None:
+        return False
+    user.is_banned = False
+    await session.commit()
+    return True
+
+
+async def get_all_users(session):
+    r = await session.execute(select(User))
+    return list(r.scalars().all())
+
+
+async def get_available_count(session):
+    r = await session.execute(
+        select(func.count()).where(Account.status == AccountStatus.available)
+    )
+    return r.scalar_one()
+
+
+async def get_sold_count(session):
+    r = await session.execute(
+        select(func.count()).where(Account.status == AccountStatus.sold)
+    )
+    return r.scalar_one()
+
+
+async def get_total_count(session):
+    r = await session.execute(select(func.count()).select_from(Account))
+    return r.scalar_one()
+
+
+async def pick_random_accounts(session, quantity):
+    r = await session.execute(
+        select(Account)
+        .where(Account.status == AccountStatus.available)
+        .order_by(func.random())
+        .limit(quantity)
+    )
+    return list(r.scalars().all())
+
+
+async def mark_accounts_sold(session, accounts, order_id):
+    now = datetime.utcnow()
+    for acc in accounts:
+        acc.status = AccountStatus.sold
+        acc.order_id = order_id
+        acc.sold_at = now
+    await session.commit()
+
+
+async def import_accounts(session, lines):
+    stats = {"total": 0, "imported": 0, "duplicates": 0, "invalid": 0}
+    for raw in lines:
+        line = raw.strip()
+        if not line:
+            continue
+        stats["total"] += 1
+        if "|" in line:
+            parts = line.split("|", 1)
+        elif ":" in line:
+            parts = line.split(":", 1)
+        else:
+            stats["invalid"] += 1
+            continue
+        uname, pwd = parts[0].strip(), parts[1].strip()
+        if not uname or not pwd:
+            stats["invalid"] += 1
+            continue
+        ex = await session.execute(select(Account).where(Account.username == uname))
+        if ex.scalar_one_or_none() is not None:
+            stats["duplicates"] += 1
+            continue
+        session.add(
+            Account(username=uname, password=pwd, status=AccountStatus.available)
+        )
+        stats["imported"] += 1
+    await session.commit()
+    return stats
+
+
+async def get_unsold_accounts(session):
+    r = await session.execute(
+        select(Account).where(Account.status == AccountStatus.available)
+    )
+    return list(r.scalars().all())
+
+
+async def get_sold_accounts(session):
+    r = await session.execute(
+        select(Account).where(Account.status == AccountStatus.sold)
+    )
+    return list(r.scalars().all())
+
+
+async def delete_account_by_username(session, username):
+    r = await session.execute(select(Account).where(Account.username == username))
+    acc = r.scalar_one_or_none()
+    if acc is None:
+        return False
+    await session.delete(acc)
+    await session.commit()
+    return True
+
+
+async def create_order(session, user_id, quantity, price, file_name):
+    order = Order(
+        user_id=user_id,
+        quantity=quantity,
+        price=price,
+        status=OrderStatus.completed,
+        file_name=file_name,
+    )
+    session.add(order)
+    await session.flush()
+    return order
+
+
+async def get_user_orders(session, user_id, limit=20):
+    r = await session.execute(
+        select(Order)
+        .where(Order.user_id == user_id)
+        .order_by(Order.created_at.desc())
+        .limit(limit)
+    )
+    return list(r.scalars().all())
+
+
+async def get_all_orders(session, limit=50):
+    r = await session.execute(
+        select(Order).order_by(Order.created_at.desc()).limit(limit)
+    )
+    return list(r.scalars().all())
+
+
+async def create_deposit(session, user_id, amount, bill_image=None):
+    dep = Deposit(
+        user_id=user_id,
+        amount=amount,
+        bill_image=bill_image,
+        status=DepositStatus.pending,
+    )
+    session.add(dep)
+    await session.commit()
+    await session.refresh(dep)
+    return dep
+
+
+async def get_deposit_by_id(session, deposit_id):
+    r = await session.execute(
+        select(Deposit)
+        .options(selectinload(Deposit.user))
+        .where(Deposit.id == deposit_id)
+    )
+    return r.scalar_one_or_none()
+
+
+async def approve_deposit(session, deposit_id, admin_tg_id):
+    dep = await get_deposit_by_id(session, deposit_id)
+    if dep is None or dep.status != DepositStatus.pending:
+        return None
+    dep.status = DepositStatus.approved
+    dep.admin_id = admin_tg_id
+    dep.approved_at = datetime.utcnow()
+    await session.commit()
+    await session.refresh(dep)
+    return dep
+
+
+async def reject_deposit(session, deposit_id, admin_tg_id):
+    dep = await get_deposit_by_id(session, deposit_id)
+    if dep is None or dep.status != DepositStatus.pending:
+        return None
+    dep.status = DepositStatus.rejected
+    dep.admin_id = admin_tg_id
+    dep.approved_at = datetime.utcnow()
+    await session.commit()
+    await session.refresh(dep)
+    return dep
+
+
+async def get_pending_deposits(session):
+    r = await session.execute(
+        select(Deposit)
+        .options(selectinload(Deposit.user))
+        .where(Deposit.status == DepositStatus.pending)
+        .order_by(Deposit.created_at.asc())
+    )
+    return list(r.scalars().all())
+
+
+# ── File utils ────────────────────────────────────────────────────────────────
+
+
+async def save_export_file(lines, prefix):
+    os.makedirs(EXPORTS_DIR, exist_ok=True)
+    ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    fp = os.path.join(EXPORTS_DIR, f"{prefix}_{ts}.txt")
+    async with aiofiles.open(fp, "w", encoding="utf-8") as f:
+        await f.write("\n".join(lines))
+    return fp
+
+
+async def save_order_file(accounts_data, order_id):
+    os.makedirs(EXPORTS_DIR, exist_ok=True)
+    ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    filename = f"order_{order_id}_{ts}.txt"
+    fp = os.path.join(EXPORTS_DIR, filename)
+    async with aiofiles.open(fp, "w", encoding="utf-8") as f:
+        await f.write("\n".join(f"{u}|{p}" for u, p in accounts_data))
+    return fp, filename
+
+
+async def save_bill_image(file_bytes, extension="jpg"):
+    os.makedirs(UPLOADS_DIR, exist_ok=True)
+    fp = os.path.join(UPLOADS_DIR, f"bill_{uuid.uuid4().hex}.{extension}")
+    async with aiofiles.open(fp, "wb") as f:
+        await f.write(file_bytes)
+    return fp
+
+
+async def save_qr_image(file_bytes):
+    os.makedirs(UPLOADS_DIR, exist_ok=True)
+    async with aiofiles.open(QR_IMAGE_PATH, "wb") as f:
+        await f.write(file_bytes)
+    return QR_IMAGE_PATH
+
+
+def qr_exists():
+    return os.path.isfile(QR_IMAGE_PATH)
+
+
+# ── Keyboards ─────────────────────────────────────────────────────────────────
+
+
+def main_menu_kb():
+    b = ReplyKeyboardBuilder()
+    b.row(KeyboardButton(text="🏠 Trang Chủ"), KeyboardButton(text="🛒 Mua Acc"))
+    b.row(KeyboardButton(text="💳 Nạp Tiền"), KeyboardButton(text="👤 Tài Khoản"))
+    b.row(KeyboardButton(text="📦 Đơn Hàng"), KeyboardButton(text="☎ Hỗ Trợ"))
+    return b.as_markup(resize_keyboard=True)
+
+
+def cancel_kb():
+    b = ReplyKeyboardBuilder()
+    b.row(KeyboardButton(text="❌ Hủy"))
+    return b.as_markup(resize_keyboard=True)
+
+
+def deposit_approval_kb(deposit_id):
+    b = InlineKeyboardBuilder()
+    b.row(
+        InlineKeyboardButton(
+            text="✅ DUYỆT", callback_data=f"approve_deposit:{deposit_id}"
+        ),
+        InlineKeyboardButton(
+            text="❌ TỪ CHỐI", callback_data=f"reject_deposit:{deposit_id}"
+        ),
+    )
+    return b.as_markup()
+
+
+def admin_menu_kb():
+    b = ReplyKeyboardBuilder()
+    b.row(KeyboardButton(text="📊 Dashboard"), KeyboardButton(text="📥 Import TXT"))
+    b.row(KeyboardButton(text="📦 Xem Kho"), KeyboardButton(text="📊 Thống Kê"))
+    b.row(KeyboardButton(text="💰 Cộng Tiền"), KeyboardButton(text="💸 Trừ Tiền"))
+    b.row(KeyboardButton(text="📷 Đổi QR"), KeyboardButton(text="📥 Bill Chờ"))
+    b.row(KeyboardButton(text="📢 Broadcast"), KeyboardButton(text="🚫 Ban User"))
+    b.row(KeyboardButton(text="✅ Unban User"), KeyboardButton(text="🗑 Xóa Account"))
+    b.row(
+        KeyboardButton(text="📤 Export Chưa Bán"),
+        KeyboardButton(text="📤 Export Đã Bán"),
+    )
+    b.row(KeyboardButton(text="🔙 Menu Chính"))
+    return b.as_markup(resize_keyboard=True)
+
+
+# ── Middleware ────────────────────────────────────────────────────────────────
+
+
+class AuthMiddleware(BaseMiddleware):
+    async def __call__(self, handler, event, data):
+        user = data.get("event_from_user")
+        if user is None:
+            return await handler(event, data)
+        is_admin = user.id in ADMIN_IDS
+        fullname = (user.full_name or "").strip() or user.username or str(user.id)
+        async with AsyncSessionLocal() as session:
+            db_user = await get_or_create_user(
+                session, user.id, user.username, fullname, is_admin
+            )
+            if db_user.is_admin != is_admin:
+                db_user.is_admin = is_admin
+                await session.commit()
+            data["db_user"] = db_user
+            data["db_session"] = session
+            data["is_admin"] = is_admin
+            if db_user.is_banned and not is_admin:
+                if isinstance(event, Message):
+                    await event.answer("🚫 Bạn đã bị cấm sử dụng bot.")
+                return
+            return await handler(event, data)
+
+
+# ── States ────────────────────────────────────────────────────────────────────
+
+
+class ShopState(StatesGroup):
+    waiting_quantity = State()
+
+
+class DepositState(StatesGroup):
+    waiting_amount = State()
+    waiting_bill = State()
+
+
+class AdminStates(StatesGroup):
+    waiting_qr = State()
+    waiting_import_file = State()
+    waiting_add_balance_id = State()
+    waiting_add_balance_amount = State()
+    waiting_subtract_balance_id = State()
+    waiting_subtract_balance_amount = State()
+    waiting_ban_id = State()
+    waiting_unban_id = State()
+    waiting_delete_username = State()
+    waiting_broadcast_text = State()
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+
+def admin_only(func):
+    @functools.wraps(func)
+    async def wrapper(message: Message, is_admin: bool, *args, **kwargs):
+        if not is_admin:
+            await message.answer("❌ Bạn không có quyền truy cập.")
+            return
+        return await func(message, is_admin=is_admin, *args, **kwargs)
+
+    return wrapper
+
+
+# ── Router ────────────────────────────────────────────────────────────────────
+
+router = Router()
+
+# ── /start & home ─────────────────────────────────────────────────────────────
+
+
+@router.message(CommandStart())
+async def cmd_start(message: Message, state: FSMContext, db_user: User, is_admin: bool):
+    await state.clear()
+    name = db_user.fullname or message.from_user.full_name or "bạn"
+    async with AsyncSessionLocal() as s:
+        available = await get_available_count(s)
+    await message.answer(
+        f"👋 Chào mừng <b>{name}</b> đến với Shop Liên Quân!\n\n"
+        f"🛒 Mua acc chất lượng, giá rẻ\n"
+        f"💰 Số dư: <b>{db_user.balance:,} VNĐ</b>\n"
+        f"📦 Kho còn: <b>{available:,} acc</b>\n\n"
+        "Chọn chức năng bên dưới:",
+        parse_mode="HTML",
+        reply_markup=main_menu_kb(),
+    )
+
+
+@router.message(lambda m: m.text == "🏠 Trang Chủ")
+async def home(message: Message, state: FSMContext, db_user: User):
+    await state.clear()
+    async with AsyncSessionLocal() as s:
+        available = await get_available_count(s)
+    name = db_user.fullname or message.from_user.full_name or "bạn"
+    await message.answer(
+        f"🏠 <b>Trang Chủ</b>\n\n"
+        f"👋 Xin chào <b>{name}</b>!\n"
+        f"💰 Số dư: <b>{db_user.balance:,} VNĐ</b>\n"
+        f"📦 Kho còn: <b>{available:,} acc</b>\n\n"
+        "Chọn chức năng bên dưới:",
+        parse_mode="HTML",
+        reply_markup=main_menu_kb(),
+    )
+
+
+@router.message(lambda m: m.text == "☎ Hỗ Trợ")
+async def support(message: Message, state: FSMContext):
+    await state.clear()
+    await message.answer(
+        "☎ <b>Hỗ Trợ</b>\n\n"
+        "Nếu gặp vấn đề, vui lòng liên hệ:\n"
+        "👤 Admin: @lananh9719\n\n"
+        "⏰ Thời gian hỗ trợ: 8:00 - 22:00 mỗi ngày",
+        parse_mode="HTML",
+    )
+
+
+# ── Shop ──────────────────────────────────────────────────────────────────────
+
+
+@router.message(lambda m: m.text == "🛒 Mua Acc")
+async def buy_acc_start(message: Message, state: FSMContext):
+    await state.clear()
+    async with AsyncSessionLocal() as s:
+        available = await get_available_count(s)
+    await message.answer(
+        f"🛒 <b>Mua Acc Liên Quân</b>\n\n"
+        f"💵 Giá: <b>{ACCOUNT_PRICE:,} VNĐ / 1 acc</b>\n"
+        f"📦 Kho còn: <b>{available:,} acc</b>\n"
+        f"⚠️ Số lượng tối thiểu: <b>{MIN_ORDER_QTY} acc</b>\n\n"
+        "Nhập số lượng acc bạn muốn mua:",
+        parse_mode="HTML",
+        reply_markup=cancel_kb(),
+    )
+    await state.set_state(ShopState.waiting_quantity)
+
+
+@router.message(ShopState.waiting_quantity, F.text == "❌ Hủy")
+async def buy_cancel(message: Message, state: FSMContext):
+    await state.clear()
+    await message.answer("❌ Đã hủy.", reply_markup=main_menu_kb())
+
+
+@router.message(ShopState.waiting_quantity, ~F.text.in_(MENU_BUTTONS))
+async def buy_acc_quantity(message: Message, state: FSMContext, db_user: User):
+    text = message.text or ""
+    if not text.isdigit():
+        await message.answer("⚠️ Vui lòng nhập số nguyên hợp lệ.")
+        return
+    quantity = int(text)
+    if quantity < MIN_ORDER_QTY:
+        await message.answer(
+            f"⚠️ Số lượng tối thiểu là <b>{MIN_ORDER_QTY} acc</b>.", parse_mode="HTML"
+        )
+        return
+    total_price = quantity * ACCOUNT_PRICE
+    async with AsyncSessionLocal() as s:
+        fresh_user = await get_user_by_id(s, db_user.id)
+        if fresh_user is None:
+            await message.answer("❌ Không tìm thấy tài khoản.")
+            await state.clear()
+            return
+        if fresh_user.balance < total_price:
+            shortage = total_price - fresh_user.balance
+            await message.answer(
+                f"❌ <b>Số dư không đủ!</b>\n\n"
+                f"💰 Số dư hiện tại: <b>{fresh_user.balance:,} VNĐ</b>\n"
+                f"💵 Cần thanh toán: <b>{total_price:,} VNĐ</b>\n"
+                f"⚠️ Thiếu: <b>{shortage:,} VNĐ</b>\n\nVui lòng nạp thêm tiền.",
+                parse_mode="HTML",
+                reply_markup=main_menu_kb(),
+            )
+            await state.clear()
+            return
+        available = await get_available_count(s)
+        if available < quantity:
+            await message.answer(
+                f"❌ Kho không đủ hàng!\n📦 Kho còn: <b>{available:,} acc</b>",
+                parse_mode="HTML",
+                reply_markup=main_menu_kb(),
+            )
+            await state.clear()
+            return
+        accounts = await pick_random_accounts(s, quantity)
+        if len(accounts) < quantity:
+            await message.answer(
+                "❌ Lỗi khi lấy acc. Vui lòng thử lại.", reply_markup=main_menu_kb()
+            )
+            await state.clear()
+            return
+        order = await create_order(s, fresh_user.id, quantity, total_price, "")
+        fresh_user.balance -= total_price
+        await mark_accounts_sold(s, accounts, order.id)
+        account_data = [(a.username, a.password) for a in accounts]
+        filepath, filename = await save_order_file(account_data, order.id)
+        order.file_name = filename
+        await s.commit()
+    await state.clear()
+    await message.answer(
+        f"✅ <b>Đặt hàng thành công!</b>\n\n"
+        f"📦 Số lượng: <b>{quantity} acc</b>\n"
+        f"💵 Tổng tiền: <b>{total_price:,} VNĐ</b>\n"
+        f"🧾 Mã đơn: <b>#{order.id}</b>\n\nĐang gửi file acc...",
+        parse_mode="HTML",
+        reply_markup=main_menu_kb(),
+    )
+    await message.answer_document(
+        FSInputFile(filepath, filename=filename),
+        caption=f"📄 File acc đơn #{order.id} — {quantity} tài khoản",
+    )
+    await message.answer(f"📌 Kiểm tra acc miễn phí tại:\n\n{CHECKER_LINK}")
+
+
+# ── Tài khoản & Đơn hàng ─────────────────────────────────────────────────────
+
+
+@router.message(lambda m: m.text == "👤 Tài Khoản")
+async def my_account(message: Message, state: FSMContext, db_user: User):
+    await state.clear()
+    joined = db_user.created_at.strftime("%d/%m/%Y") if db_user.created_at else "N/A"
+    async with AsyncSessionLocal() as s:
+        orders = await get_user_orders(s, db_user.id, limit=9999)
+    uname = f"@{db_user.username}" if db_user.username else "Không có"
+    await message.answer(
+        f"👤 <b>Thông Tin Tài Khoản</b>\n\n"
+        f"🆔 Telegram ID: <code>{db_user.telegram_id}</code>\n"
+        f"👤 Username: {uname}\n"
+        f"📛 Tên: {db_user.fullname}\n"
+        f"💰 Số dư: <b>{db_user.balance:,} VNĐ</b>\n"
+        f"📦 Tổng đơn: <b>{len(orders)}</b>\n"
+        f"📅 Ngày tham gia: {joined}",
+        parse_mode="HTML",
+    )
+
+
+@router.message(lambda m: m.text == "📦 Đơn Hàng")
+async def my_orders(message: Message, state: FSMContext, db_user: User):
+    await state.clear()
+    async with AsyncSessionLocal() as s:
+        orders = await get_user_orders(s, db_user.id, limit=20)
+    if not orders:
+        await message.answer("📦 Bạn chưa có đơn hàng nào.")
+        return
+    lines = ["📦 <b>20 Đơn Hàng Gần Nhất</b>\n"]
+    for i, o in enumerate(orders, 1):
+        created = o.created_at.strftime("%d/%m/%Y %H:%M") if o.created_at else "N/A"
+        lines.append(
+            f"{i}. Đơn #{o.id} — {o.quantity} acc — {o.price:,} VNĐ — {created}"
+        )
+    await message.answer("\n".join(lines), parse_mode="HTML")
+
+
+# ── Nạp tiền ─────────────────────────────────────────────────────────────────
+
+
+@router.message(lambda m: m.text == "💳 Nạp Tiền")
+async def deposit_start(message: Message, state: FSMContext):
+    await state.clear()
+    if not qr_exists():
+        await message.answer("⚠️ Admin chưa cấu hình mã QR. Vui lòng liên hệ Admin.")
+        return
+    await message.answer_photo(
+        FSInputFile(QR_IMAGE_PATH),
+        caption="💳 <b>Nạp Tiền</b>\n\nQuét mã QR để chuyển khoản.\n\nNhập số tiền muốn nạp (VNĐ):",
+        parse_mode="HTML",
+        reply_markup=cancel_kb(),
+    )
+    await state.set_state(DepositState.waiting_amount)
+
+
+@router.message(DepositState.waiting_amount, F.text == "❌ Hủy")
+async def deposit_cancel_amount(message: Message, state: FSMContext):
+    await state.clear()
+    await message.answer("❌ Đã hủy.", reply_markup=main_menu_kb())
+
+
+@router.message(DepositState.waiting_amount, ~F.text.in_(MENU_BUTTONS))
+async def deposit_amount(message: Message, state: FSMContext):
+    text = (message.text or "").replace(",", "").replace(".", "").strip()
+    if not text.isdigit() or int(text) <= 0:
+        await message.answer("⚠️ Vui lòng nhập số tiền hợp lệ (VD: 50000).")
+        return
+    amount = int(text)
+    await state.update_data(amount=amount)
+    await message.answer(
+        f"💵 Số tiền nạp: <b>{amount:,} VNĐ</b>\n\n📷 Vui lòng gửi ảnh bill chuyển khoản:",
+        parse_mode="HTML",
+        reply_markup=cancel_kb(),
+    )
+    await state.set_state(DepositState.waiting_bill)
+
+
+@router.message(DepositState.waiting_bill, F.text == "❌ Hủy")
+async def deposit_cancel_bill(message: Message, state: FSMContext):
+    await state.clear()
+    await message.answer("❌ Đã hủy.", reply_markup=main_menu_kb())
+
+
+@router.message(DepositState.waiting_bill, F.photo)
+async def deposit_bill_photo(
+    message: Message, state: FSMContext, bot: Bot, db_user: User
+):
+    data = await state.get_data()
+    amount = data.get("amount", 0)
+    await state.clear()
+    photo = message.photo[-1]
+    file = await bot.get_file(photo.file_id)
+    file_bytes = await bot.download_file(file.file_path)
+    bill_path = await save_bill_image(file_bytes.read(), "jpg")
+    async with AsyncSessionLocal() as s:
+        deposit = await create_deposit(s, db_user.id, amount, bill_path)
+        uname = f"@{db_user.username}" if db_user.username else "Không có"
+        now_str = datetime.utcnow().strftime("%d/%m/%Y %H:%M:%S UTC")
+        caption = (
+            f"💳 <b>YÊU CẦU NẠP TIỀN</b>\n\n"
+            f"🆔 Telegram ID: <code>{db_user.telegram_id}</code>\n"
+            f"👤 Username: {uname}\n"
+            f"📛 Tên: {db_user.fullname}\n"
+            f"💵 Số tiền: <b>{amount:,} VNĐ</b>\n"
+            f"🕐 Thời gian: {now_str}\n"
+            f"🧾 Deposit ID: #{deposit.id}"
+        )
+        kb = deposit_approval_kb(deposit.id)
+        for admin_id in ADMIN_IDS:
+            try:
+                await message.forward(admin_id)
+                await bot.send_message(
+                    admin_id, caption, parse_mode="HTML", reply_markup=kb
                 )
-                get_user(user_id, username, fullname)
-                conn.execute('UPDATE users SET referred_by = ? WHERE telegram_id = ?', (ref_by, user_id))
-                conn.commit()
-            conn.close()
+            except Exception:
+                pass
+    await message.answer(
+        f"✅ <b>Đã gửi yêu cầu nạp tiền!</b>\n\n"
+        f"💵 Số tiền: <b>{amount:,} VNĐ</b>\n"
+        "⏳ Vui lòng đợi Admin duyệt.",
+        parse_mode="HTML",
+        reply_markup=main_menu_kb(),
+    )
+
+
+@router.message(DepositState.waiting_bill, ~F.text.in_(MENU_BUTTONS))
+async def deposit_bill_invalid(message: Message):
+    await message.answer("⚠️ Vui lòng gửi ảnh bill (ảnh chụp màn hình).")
+
+
+@router.callback_query(F.data.startswith("approve_deposit:"))
+async def cb_approve_deposit(callback: CallbackQuery, bot: Bot, is_admin: bool):
+    if not is_admin:
+        await callback.answer("❌ Bạn không có quyền.", show_alert=True)
+        return
+    deposit_id = int(callback.data.split(":")[1])
+    async with AsyncSessionLocal() as s:
+        deposit = await approve_deposit(s, deposit_id, callback.from_user.id)
+        if deposit is None:
+            await callback.answer(
+                "⚠️ Yêu cầu không tồn tại hoặc đã xử lý.", show_alert=True
+            )
+            return
+        user_after = await add_balance(s, deposit.user_id, deposit.amount)
+        user_tg_id = deposit.user.telegram_id if deposit.user else None
+    await callback.message.edit_reply_markup(reply_markup=None)
+    await callback.message.reply(
+        f"✅ Đã duyệt nạp tiền <b>{deposit.amount:,} VNĐ</b> — #{deposit_id}",
+        parse_mode="HTML",
+    )
+    if user_tg_id:
+        try:
+            await bot.send_message(
+                user_tg_id,
+                f"✅ <b>Nạp tiền thành công!</b>\n\n"
+                f"💵 Số tiền: <b>{deposit.amount:,} VNĐ</b>\n"
+                f"💰 Số dư hiện tại: <b>{user_after.balance:,} VNĐ</b>",
+                parse_mode="HTML",
+            )
         except Exception:
             pass
-
-    user = get_user(user_id, username, fullname)
-    
-    if kiem_tra_vip(user_id):
-        is_vip = '👑 Thành viên VIP'
-    else:
-        is_vip = 'Thành viên Thường'
-        
-    text = (
-        f"👋 Chào mừng <b>{user['fullname']}</b> đến với Shop Liên Quân - Tài Xỉu Động!\n\n"
-        f"💰 Số dư ví: <b>{user['xu']:,} điểm</b>\n"
-        f"👑 Cấp bậc: <b>{is_vip}</b>\n\n"
-        f"🎮 <b>HƯỚNG DẪN CHƠI TÀI XỈU SIÊU TỐC:</b>\n"
-        f"👉 Gõ lệnh: <code>/tx t [số điểm]</code> (Đặt Tài)\n"
-        f"👉 Gõ lệnh: <code>/tx x [số điểm]</code> (Đặt Xỉu)\n"
-        f"👉 Gõ lệnh: <code>/tang [ID_Nhận] [số điểm]</code> (Tặng điểm cho bạn bè)\n\n"
-        f"<i>Luật: 3-10 nút = Xỉu | 11-18 nút = Tài. Lắc hiệu ứng chuyển động Telegram thật 100%!</i>"
-    )
-    
-    if user_id == ADMIN_ID:
-        text += (
-            "\n\n👑 <b>LỆNH ADMIN ẨN:</b>\n"
-            "<code>/gaikq [tai/xiu/huy]</code> - Ép kết quả phiên sau\n"
-            "<code>/taoma [MÃ] [xu] [lượt]</code> - Tạo giftcode\n"
-            "<code>/xoama [MÃ]</code> - Xóa giftcode\n"
-            "<code>/congbong [ID] [số xu]</code> - Bơm điểm nhanh\n"
-            "<code>/setvip [ID] [số ngày]</code> - Set hạn VIP nhanh"
-        )
-    
-    bot.send_message(message.chat.id, text, parse_mode="HTML", reply_markup=menu_chinh(user_id))
-
-# ════════════════════════════════════════════════════════
-# 🏠 XỬ LÝ TEXT MENU NGƯỜI DÙNG
-# ════════════════════════════════════════════════════════
-@bot.message_handler(func=lambda m: m.text in ["🏠 Trang Chủ", "🔙 Menu Chính", "☎ Hỗ Trợ", "⚙️ Menu Admin Panel", "👤 Tài Khoản", "🎁 Free & VIP", "💳 Nạp Tiền", "🛒 Mua Acc", "📦 Đơn Hàng"])
-def handling_text_menu(message):
-    user_id = message.from_user.id
-    
-    if message.text in ["🏠 Trang Chủ", "🔙 Menu Chính"]:
-        user_state.pop(user_id, None)
-        cmd_start(message)
-        return
-
-    if message.text == "☎ Hỗ Trợ":
-        bot.send_message(message.chat.id, "☎ <b>HỆ THỐNG TRỢ GIÚP CHỦ SHOP</b>\n\n👤 Admin: @lananh9719\n⏰ Thời gian hỗ trợ duyệt nạp: 8:00 - 24:00", parse_mode="HTML")
-        return
-
-    if message.text == "⚙️ Menu Admin Panel":
-        if user_id == ADMIN_ID:
-            bot.send_message(message.chat.id, "🔐 Đã mở bảng điều khiển Admin Panel của sếp!", reply_markup=menu_admin_panel())
-        return
-        
-    if message.text == "👤 Tài Khoản":
-        user = get_user(user_id, message.from_user.username)
-        if kiem_tra_vip(user_id):
-            is_vip = "👑 VIP"
-        else:
-            is_vip = "Thường"
-        text = (
-            f"👤 <b>HỒ SƠ TÀI KHOẢN CỦA BẠN</b>\n\n"
-            f"🪪 ID Telegram: <code>{user_id}</code>\n"
-            f"🏅 Cấp bậc: <b>{is_vip}</b>\n"
-            f"💰 Số dư ví điểm: <b>{user['xu']:,} Xu/Điểm</b>\n\n"
-            f"💡 Mẹo lấy ID: Gõ lệnh <code>/myid</code> gửi lên nhóm/bot."
-        )
-        bot.send_message(message.chat.id, text, parse_mode="HTML")
-        return
-        
-    if message.text == "🎁 Free & VIP":
-        bot.send_message(message.chat.id, "🎁 Khu Vực Cày Điểm & Ưu Đãi VIP. Hãy chọn tính năng bên dưới:", reply_markup=menu_free_vip())
-        return
-        
-    if message.text == "💳 Nạp Tiền":
-        if not os.path.exists(QR_IMAGE_PATH):
-            bot.send_message(message.chat.id, "⚠️ Chủ shop chưa cấu hình mã ảnh QR nạp tiền.")
-            return
-        user_state[user_id] = "nap_tien_cho_gia"
-        with open(QR_IMAGE_PATH, 'rb') as photo:
-            bot.send_photo(message.chat.id, photo, caption="💳 Bạn vui lòng quét mã QR chuyển khoản ở trên.\n\n👉 Nhập số tiền bạn muốn nạp (Ví dụ: 50000):")
-        return
-
-    if message.text == "🛒 Mua Acc":
-        conn = get_db_connection()
-        cnt = conn.execute("SELECT COUNT(*) FROM accounts WHERE status='available'").fetchone()[0]
-        conn.close()
-        bot.send_message(message.chat.id, f"🛒 <b>MUA ACCOUNT LIÊN QUÂN LẺ</b>\n\n💵 Giá bán: <b>{ACCOUNT_PRICE:,} điểm/1 acc</b>\n📦 Kho hàng còn: <b>{cnt} account khả dụng</b>\n\n👉 Vui lòng nhập số lượng acc bạn muốn mua:")
-        user_state[user_id] = "mua_acc_cho_qty"
-        return
-
-    if message.text == "📦 Đơn Hàng":
-        conn = get_db_connection()
-        orders = conn.execute('SELECT * FROM orders WHERE telegram_id = ? ORDER BY id DESC LIMIT 10', (user_id,)).fetchall()
-        conn.close()
-        if not orders:
-            bot.send_message(message.chat.id, "📦 Bạn chưa thực hiện đơn hàng mua acc nào trên hệ thống.")
-            return
-        txt = "📋 <b>LỊCH SỬ MUA ACC (10 ĐƠN GẦN NHẤT):</b>\n\n"
-        for o in orders:
-            txt += f"• Đơn #{o['id']} | Số lượng: {o['quantity']} acc | Giá: {o['price']:,}đ\n"
-        bot.send_message(message.chat.id, txt, parse_mode="HTML")
-        return
-
-# ════════════════════════════════════════════════════════
-# 🎲 TRÒ CHƠI TÀI XỈU LỆNH NHANH CHUYỂN ĐỘNG ĐỘNG GIỮ NGUYÊN KHÔNG MỨC MAX
-# ════════════════════════════════════════════════════════
-@bot.message_handler(commands=['tx'])
-def lenh_tx_nhanh(message):
-    user_id = message.from_user.id
-    user = get_user(user_id, message.from_user.username)
-    args = message.text.split()
-    
-    if len(args) < 3:
-        bot.reply_to(message, "⚠️ <b>Cú pháp đặt cược sai!</b>\n👉 Gõ nhanh: <code>/tx t 500</code> (Đặt Tài)\n👉 Gõ nhanh: <code>/tx x 1000</code> (Đặt Xỉu)", parse_mode="HTML")
-        return
-        
-    cua_chon = args[1].lower()
-    if cua_chon not in ["t", "tai", "tài", "x", "xiu", "xỉu"]:
-        bot.reply_to(message, "⚠️ Cửa cược không hợp lệ! Hãy dùng <b>t</b> hoặc <b>x</b>.", parse_mode="HTML")
-        return
-        
-    if cua_chon in ["t", "tai", "tài"]:
-        cua_dat = "Tài"
-    else:
-        cua_dat = "Xỉu"
-    
-    try:
-        cuoc = int(args[2])
-    except ValueError:
-        bot.reply_to(message, "⚠️ Số điểm cược nhập vào bắt buộc phải là số nguyên!")
-        return
-        
-    if cuoc <= 0:
-        bot.reply_to(message, "⚠️ Số tiền đặt cược phải lớn hơn 0 xu!")
-        return
-        
-    if cuoc > user["xu"]:
-        bot.reply_to(message, f"😢 Tài khoản không đủ điểm. Ví bạn còn: <b>{user['xu']:,} điểm</b>.", parse_mode="HTML")
-        return
-
-    # Trừ cược ngay khi gõ lệnh để chống cheat bug
-    update_user_xu(user_id, -cuoc)
-    
-    bot.send_message(message.chat.id, f"🎲 Bạn đặt cược thành công <b>{cuoc:,} điểm</b> vào cửa <b>{cua_dat.upper()}</b>.\n⏳ Máy chủ đang đổ xúc xắc chuyển động...", parse_mode="HTML")
-    
-    # 3 Xúc xắc xoay động của Telegram
-    dice1 = bot.send_dice(message.chat.id, emoji="🎲")
-    dice2 = bot.send_dice(message.chat.id, emoji="🎲")
-    dice3 = bot.send_dice(message.chat.id, emoji="🎲")
-    
-    d1 = dice1.dice.value
-    d2 = dice2.dice.value
-    d3 = dice3.dice.value
-    tong = d1 + d2 + d3
-    
-    # Hệ thống gài kết quả Admin
-    if CONFIG["force_result"] is not None:
-        ket_qua = CONFIG["force_result"]
-        CONFIG["force_result"] = None
-    else:
-        if tong <= 10:
-            ket_qua = "Xỉu"
-        else:
-            ket_qua = "Tài"
-        
-    thang = (cua_dat == ket_qua)
-    time.sleep(2.5) # Chờ xúc xắc quay xong mượt mà
-    
-    if thang:
-        update_user_xu(user_id, cuoc * 2)
-        status = f"🎉 <b>CHIẾN THẮNG!</b>\n🪙 Cộng thưởng: +<b>{cuoc * 2:,} điểm</b>"
-    else:
-        status = f"💥 <b>THẤT BẠI!</b>\n😢 Trừ điểm cược: -<b>{cuoc:,} điểm</b>"
-        
-    fresh_user = get_user(user_id)
-    bot.send_message(
-        message.chat.id,
-        f"📊 <b>KẾT QUẢ PHIÊN LẮC</b>\n"
-        f"━━━━━━━━━━━━━━━━━━\n"
-        f"🎲 Kết quả: {d1} + {d2} + {d3} = <b>{tong} nút</b>\n"
-        f"👉 Cửa thắng: <b>{ket_qua.upper()}</b>\n"
-        f"━━━━━━━━━━━━━━━━━━\n"
-        f"{status}\n"
-        f"💳 Ví hiện tại: <b>{fresh_user['xu']:,} điểm</b>",
-        parse_mode="HTML",
-        reply_markup=menu_chinh(user_id)
-    )
+    await callback.answer("✅ Đã duyệt!")
 
 
-# ════════════════════════════════════════════════════════
-# 💸 LỆNH TẶNG ĐIỂM GIỮA NGƯỜI CHƠI
-# ════════════════════════════════════════════════════════
-@bot.message_handler(commands=['tang', 'chuyen'])
-def cmd_tang_diem(message):
-    user_id = message.from_user.id
-    user_gui = get_user(user_id, message.from_user.username)
-    args = message.text.split()
-    
-    if len(args) < 3:
-        bot.reply_to(message, "⚠️ Cú pháp: <code>/tang [ID_Người_Nhận] [Số_điểm]</code>", parse_mode="HTML")
+@router.callback_query(F.data.startswith("reject_deposit:"))
+async def cb_reject_deposit(callback: CallbackQuery, bot: Bot, is_admin: bool):
+    if not is_admin:
+        await callback.answer("❌ Bạn không có quyền.", show_alert=True)
         return
-    try:
-        target_id = int(args[1])
-        so_diem = int(args[2])
-    except ValueError:
-        bot.reply_to(message, "⚠️ ID người nhận và Số điểm bắt buộc phải là chữ số.")
-        return
-        
-    if target_id == user_id:
-        bot.reply_to(message, "⚠️ Bạn không thể tự chuyển điểm cho chính mình.")
-        return
-    if so_diem <= 0:
-        bot.reply_to(message, "⚠️ Số điểm chuyển tặng phải lớn hơn 0.")
-        return
-    if so_diem > user_gui["xu"]:
-        bot.reply_to(message, f"❌ Số dư điểm không đủ. Bạn chỉ còn: <b>{user_gui['xu']:,} điểm</b>.", parse_mode="HTML")
-        return
-
-    conn = get_db_connection()
-    user_nhan = conn.execute('SELECT * FROM users WHERE telegram_id = ?', (target_id,)).fetchone()
-    if not user_nhan:
-        conn.close()
-        bot.reply_to(message, "❌ Người nhận chưa từng kích hoạt bot này. Hãy bảo họ gõ lệnh <code>/start</code> trước nhé.", parse_mode="HTML")
-        return
-        
-    conn.execute('UPDATE users SET xu = xu - ? WHERE telegram_id = ?', (so_diem, user_id))
-    conn.execute('UPDATE users SET xu = xu + ? WHERE telegram_id = ?', (so_diem, target_id))
-    conn.commit()
-    conn.close()
-
-    bot.send_message(message.chat.id, f"✅ Đã chuyển tặng thành công <b>{so_diem:,} điểm</b> cho ID <code>{target_id}</code>.", parse_mode="HTML")
-    try:
-        bot.send_message(target_id, f"🎁 Bạn vừa nhận được +<b>{so_diem:,} điểm</b> quà tặng từ tài khoản ID <code>{user_id}</code>!", parse_mode="HTML")
-    except Exception:
-        pass
-
-# ════════════════════════════════════════════════════════
-# 🎁 MENU FREE & VIP (ĐIỂM DANH, LINK REF, NHẬN ACC VIP)
-# ════════════════════════════════════════════════════════
-@bot.message_handler(func=lambda m: m.text in ["📅 Điểm Danh Nhận Điểm", "🔗 Link Giới Thiệu", "👑 Nhận Acc VIP Free", "⚡ Mua Gói VIP"])
-def handling_free_vip_menu(message):
-    user_id = message.from_user.id
-    user = get_user(user_id, message.from_user.username)
-    today_str = datetime.date.today().strftime("%Y-%m-%d")
-    
-    if message.text == "📅 Điểm Danh Nhận Điểm":
-        if user["last_checkin_date"] == today_str:
-            bot.reply_to(message, "⚠️ Hôm nay bạn đã thực hiện điểm danh rồi, quay lại vào ngày mai nhé!")
-            return
-        conn = get_db_connection()
-        conn.execute('UPDATE users SET xu = xu + ?, last_checkin_date = ? WHERE telegram_id = ?', (CONFIG["xu_diemdanh"], today_str, user_id))
-        conn.commit()
-        conn.close()
-        bot.send_message(message.chat.id, f"🎉 Điểm danh thành công! Bạn nhận được: +<b>{CONFIG['xu_diemdanh']} điểm</b>.", parse_mode="HTML")
-        return
-        
-    if message.text == "🔗 Link Giới Thiệu":
-        bot_info = bot.get_me()
-        url = f"https://t.me/{bot_info.username}?start=ref_{user_id}"
-        bot.send_message(message.chat.id, f"🔗 <b>LINK GIỚI THIỆU ĐỘC QUYỀN CỦA BẠN:</b>\n<code>{url}</code>\n\n🎁 Thưởng ngay +<b>5,000 điểm</b> vào ví chính khi có người mới tham gia qua link của bạn!", parse_mode="HTML")
-        return
-        
-    if message.text == "⚡ Mua Gói VIP":
-        bot.send_message(message.chat.id, f"👑 <b>MUA VIP TỰ ĐỘNG BẰNG ĐIỂM VÍ</b>\n\n💰 Số dư hiện tại: {user['xu']:,} điểm\n👉 Gói Tuần: 50,000đ | Gói Tháng: 100,000đ.\nChọn gói muốn mua dưới đây:", parse_mode="HTML", reply_markup=inline_menu_vip())
-        return
-        
-    if message.text == "👑 Nhận Acc VIP Free":
-        if not kiem_tra_vip(user_id):
-            bot.reply_to(message, "❌ Tính năng nhận acc free chỉ dành cho tài khoản đang kích hoạt trạng thái VIP!")
-            return
-        conn = get_db_connection()
-        cnt = conn.execute("SELECT COUNT(*) FROM accounts WHERE status='available'").fetchone()[0]
-        db_user = conn.execute('SELECT * FROM users WHERE telegram_id = ?', (user_id,)).fetchone()
-        conn.close()
-        
-        if db_user['last_vip_claim_date'] == today_str:
-            claimed = db_user['vip_claimed_today']
-        else:
-            claimed = 0
-            
-        con_lai = VIP_DAILY_LIMIT - claimed
-        
-        if con_lai <= 0:
-            bot.send_message(message.chat.id, "⚠️ Hôm nay bạn đã lấy hết định mức giới hạn 100 acc free rồi!")
-            return
-        bot.send_message(message.chat.id, f"👑 Bạn đang có quyền lấy thêm tối đa: <b>{con_lai} acc free</b> hôm nay.\n📦 Kho còn: {cnt} acc.\n👉 Vui lòng nhập số lượng muốn lấy:")
-        user_state[user_id] = "nhan_vip_free_cho_qty"
-        return
-
-# ════════════════════════════════════════════════════════
-# 📥 KHU VỰC HỨNG DỮ LIỆU NHẬP (FSM INPUTS) - TÁCH BẠCH RÕ RÀNG
-# ════════════════════════════════════════════════════════
-@bot.message_handler(content_types=['photo', 'document', 'text'])
-def handling_all_inputs(message):
-    user_id = message.from_user.id
-    state = user_state.get(user_id)
-    if not state: 
-        return
-
-    # 1. Hứng số lượng mua acc lẻ
-    if state == "mua_acc_cho_qty":
-        if not message.text or not message.text.isdigit():
-            return
-        qty = int(message.text)
-        if qty <= 0: 
-            return
-        total_cost = qty * ACCOUNT_PRICE
-        user = get_user(user_id)
-        if user["xu"] < total_cost:
-            bot.send_message(message.chat.id, f"❌ Không đủ số dư! Đơn hàng cần {total_cost:,}đ nhưng ví bạn chỉ có {user['xu']:,}đ.", reply_markup=menu_chinh(user_id))
-            user_state.pop(user_id, None)
-            return
-            
-        conn = get_db_connection()
-        accs = conn.execute("SELECT * FROM accounts WHERE status='available' ORDER BY RANDOM() LIMIT ?", (qty,)).fetchall()
-        if len(accs) < qty:
-            bot.send_message(message.chat.id, f"❌ Kho hàng không đủ acc! Hiện chỉ còn {len(accs)} acc khả dụng.")
-            conn.close()
-            user_state.pop(user_id, None)
-            return
-            
-        fn = f"exports/order_{uuid.uuid4().hex[:6]}.txt"
-        with open(fn, 'w', encoding='utf-8') as f:
-            for a in accs:
-                f.write(f"{a['username']}|{a['password']}\n")
-                conn.execute("UPDATE accounts SET status='sold', sold_at=? WHERE id=?", (datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), a['id']))
-        
-        conn.execute("UPDATE users SET xu = xu - ? WHERE telegram_id = ?", (total_cost, user_id))
-        conn.execute("INSERT INTO orders (telegram_id, quantity, price, file_name, created_at) VALUES (?, ?, ?, ?, ?)",
-                     (user_id, qty, total_cost, fn, datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
-        conn.commit()
-        
-        cnt = conn.execute("SELECT COUNT(*) FROM accounts WHERE status='available'").fetchone()[0]
-        if cnt <= LOW_STOCK_ALERT:
-            try: 
-                bot.send_message(ADMIN_ID, f"⚠️ <b>CẢNH BÁO:</b> Kho sắp hết acc lẻ! Còn lại: {cnt} acc.")
-            except Exception: 
-                pass
-        conn.close()
-            
-        user_state.pop(user_id, None)
-        bot.send_message(message.chat.id, f"✅ Thanh toán đơn hàng mua {qty} acc thành công!", reply_markup=menu_chinh(user_id))
-        with open(fn, 'rb') as document:
-            bot.send_document(document, caption=f"📌 Kiểm tra acc miễn phí tại:\n\n{CHECKER_LINK}")
-        return
-
-    # 2. Hứng số lượng nhận acc free cho VIP
-    if state == "nhan_vip_free_cho_qty":
-        if not message.text or not message.text.isdigit():
-            return
-        qty = int(message.text)
-        today_str = datetime.date.today().strftime("%Y-%m-%d")
-        
-        conn = get_db_connection()
-        db_user = conn.execute('SELECT * FROM users WHERE telegram_id = ?', (user_id,)).fetchone()
-        
-        if db_user['last_vip_claim_date'] == today_str:
-            claimed = db_user['vip_claimed_today']
-        else:
-            claimed = 0
-            
-        con_lai = VIP_DAILY_LIMIT - claimed
-        if qty > con_lai:
-            conn.close()
-            bot.reply_to(message, f"⚠️ Bạn nhập vượt giới hạn. Hôm nay bạn chỉ được lấy thêm {con_lai} acc.")
-            return
-            
-        accs = conn.execute("SELECT * FROM accounts WHERE status='available' ORDER BY RANDOM() LIMIT ?", (qty,)).fetchall()
-        if len(accs) < qty:
-            conn.close()
-            bot.reply_to(message, f"❌ Kho hàng không đủ acc! Hiện chỉ còn {len(accs)} acc.")
-            return
-            
-        fn = f"exports/vip_free_{uuid.uuid4().hex[:6]}.txt"
-        with open(fn, 'w', encoding='utf-8') as f:
-            for a in accs:
-                f.write(f"{a['username']}|{a['password']}\n")
-                conn.execute("UPDATE accounts SET status='sold', sold_at=? WHERE id=?", (datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), a['id']))
-        
-        conn.execute("UPDATE users SET vip_claimed_today = ?, last_vip_claim_date = ? WHERE telegram_id = ?", (claimed + qty, today_str, user_id))
-        conn.commit()
-        conn.close()
-            
-        user_state.pop(user_id, None)
-        bot.send_message(message.chat.id, f"🎉 Đã xuất {qty} acc free dành cho VIP!", reply_markup=menu_free_vip())
-        with open(fn, 'rb') as document:
-            bot.send_document(document, caption=f"📌 Kiểm tra acc miễn phí tại:\n\n{CHECKER_LINK}")
-        return
-
-    # 3. Hứng số tiền nạp bill
-    if state == "nap_tien_cho_gia":
-        if not message.text or not message.text.isdigit():
-            return
-        amount = int(message.text)
-        user_state[user_id] = f"nap_bill_cho_anh_{amount}"
-        bot.send_message(message.chat.id, f"💵 Ghi nhận số tiền: <b>{amount:,} VNĐ</b>\n\n👉 Vui lòng gửi tấm ảnh chụp màn hình Bill giao dịch thành công tại đây:")
-        return
-        
-    # 4. Hứng ảnh chụp bill gửi Admin
-    if str(state).startswith("nap_bill_cho_anh_") and message.content_type == 'photo':
-        amount = int(str(state).split("_")[-1])
-        user_state.pop(user_id, None)
-        
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("INSERT INTO deposits (telegram_id, amount) VALUES (?, ?)", (user_id, amount))
-        dep_id = cursor.lastrowid
-        conn.commit()
-        conn.close()
-            
-        bot.send_message(message.chat.id, "✅ Đã gửi hóa đơn lên hệ thống! Vui lòng chờ Admin duyệt điểm.", reply_markup=menu_chinh(user_id))
-        
-        try:
-            bot.forward_message(ADMIN_ID, message.chat.id, message.message_id)
-            bot.send_message(
-                ADMIN_ID, 
-                f"💳 <b>YÊU CẦU NẠP TIỀN #{dep_id}</b>\n\n👤 User: <code>{user_id}</code>\n💵 Số tiền: <b>{amount:,} VNĐ</b>\n👉 Hãy bấm nút duyệt nạp bên dưới:", 
-                parse_mode="HTML", 
-                reply_markup=inline_duyet_bill(dep_id)
+    deposit_id = int(callback.data.split(":")[1])
+    async with AsyncSessionLocal() as s:
+        deposit = await reject_deposit(s, deposit_id, callback.from_user.id)
+        if deposit is None:
+            await callback.answer(
+                "⚠️ Yêu cầu không tồn tại hoặc đã xử lý.", show_alert=True
             )
-        except Exception: 
+            return
+        user_tg_id = deposit.user.telegram_id if deposit.user else None
+    await callback.message.edit_reply_markup(reply_markup=None)
+    await callback.message.reply(
+        f"❌ Đã từ chối nạp tiền <b>{deposit.amount:,} VNĐ</b> — #{deposit_id}",
+        parse_mode="HTML",
+    )
+    if user_tg_id:
+        try:
+            await bot.send_message(
+                user_tg_id,
+                f"❌ <b>Yêu cầu nạp tiền bị từ chối!</b>\n\n💵 Số tiền: <b>{deposit.amount:,} VNĐ</b>",
+                parse_mode="HTML",
+            )
+        except Exception:
             pass
-        return
+    await callback.answer("❌ Đã từ chối!")
 
-    # 5. ADMIN: Nhập ảnh đổi QR ngân hàng
-    if state == "adm_cho_anh_qr" and message.content_type == 'photo' and user_id == ADMIN_ID:
-        user_state.pop(user_id, None)
-        file_info = bot.get_file(message.photo[-1].file_id)
-        downloaded_file = bot.download_file(file_info.file_path)
-        with open(QR_IMAGE_PATH, 'wb') as new_file:
-            new_file.write(downloaded_file)
-        bot.send_message(message.chat.id, "✅ Đã cập nhật ảnh mã QR nạp tiền mới của hệ thống!", reply_markup=menu_admin_panel())
-        return
 
-    # 6. ADMIN: Gửi file TXT để import acc
-    if state == "adm_cho_file_txt" and message.content_type == 'document' and user_id == ADMIN_ID:
-        user_state.pop(user_id, None)
-        if not message.document.file_name.endswith(".txt"):
-            bot.send_message(message.chat.id, "❌ Lỗi: Bắt buộc phải là file đuôi định dạng .txt")
-            return
-        file_info = bot.get_file(message.document.file_id)
-        downloaded_file = bot.download_file(file_info.file_path).decode("utf-8", errors="ignore")
-        
-        success = 0
-        dup = 0
-        conn = get_db_connection()
-        for line in downloaded_file.splitlines():
-            line = line.strip()
-            if not line: 
-                continue
-            if "|" in line: 
-                parts = line.split("|", 1)
-            elif ":" in line: 
-                parts = line.split(":", 1)
-            else: 
-                continue
-            
-            u = parts[0].strip()
-            p = parts[1].strip()
-            try:
-                conn.execute("INSERT INTO accounts (username, password) VALUES (?, ?)", (u, p))
-                success += 1
-            except sqlite3.IntegrityError:
-                dup += 1
-        conn.commit()
-        conn.close()
-        bot.send_message(message.chat.id, f"📥 <b>KẾT QUẢ ĐỌC FILE ACC:</b>\n✅ Thành công: {success} acc\n🔁 Bị trùng: {dup} acc", parse_mode="HTML", reply_markup=menu_admin_panel())
-        return
+# ── Admin ─────────────────────────────────────────────────────────────────────
 
-    # 7. ADMIN: Nhập tin nhắn Broadcast thông báo
-    if state == "adm_cho_broadcast" and message.text and user_id == ADMIN_ID:
-        user_state.pop(user_id, None)
-        conn = get_db_connection()
-        users = conn.execute("SELECT telegram_id FROM users").fetchall()
-        conn.close()
-        sent = 0
-        for u in users:
-            try:
-                bot.send_message(u['telegram_id'], f"📢 <b>THÔNG BÁO TỪ HỆ THỐNG:</b>\n\n{message.text}", parse_mode="HTML")
-                sent += 1
-                time.sleep(0.05)
-            except Exception: 
-                pass
-        bot.send_message(message.chat.id, f"✅ Đã truyền tải thông báo thành công tới {sent}/{len(users)} người dùng.", reply_markup=menu_admin_panel())
-        return
 
-# ════════════════════════════════════════════════════════
-# 👑 XỬ LÝ LỆNH NÚT BẤM CỦA CHỦ SHOP (ADMIN)
-# ════════════════════════════════════════════════════════
-@bot.message_handler(func=lambda m: m.text in ["📊 Dashboard", "📥 Import TXT", "📦 Xem Kho", "📷 Đổi QR", "📢 Broadcast"] and m.from_user.id == ADMIN_ID)
-def handling_admin_buttons(message):
-    user_id = message.from_user.id
-    
-    if message.text == "📊 Dashboard":
-        conn = get_db_connection()
-        total_u = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
-        total_acc = conn.execute("SELECT COUNT(*) FROM accounts").fetchone()[0]
-        avail_acc = conn.execute("SELECT COUNT(*) FROM accounts WHERE status='available'").fetchone()[0]
-        rev_val = conn.execute("SELECT SUM(price) FROM orders").fetchone()[0]
-        if rev_val is not None:
-            revenue = rev_val
-        else:
-            revenue = 0
-        conn.close()
-        bot.send_message(message.chat.id, f"📊 <b>DASHBOARD QUẢN LÝ TỔNG QUAN</b>\n\n👥 Tổng người dùng: {total_u}\n📦 Tổng số acc: {total_acc}\n✅ Acc chưa bán: {avail_acc}\n💰 Doanh thu shop: {revenue:,} điểm", parse_mode="HTML")
+@router.message(Command("admin"))
+async def cmd_admin(message: Message, is_admin: bool):
+    if not is_admin:
+        await message.answer("❌ Bạn không có quyền.")
         return
-        
-    if message.text == "📥 Import TXT":
-        user_state[user_id] = "adm_cho_file_txt"
-        bot.send_message(message.chat.id, "📥 Sếp vui lòng gửi file đính kèm định dạng <code>.txt</code> chứa list acc (Tài khoản|Mật khẩu) lên đây:", parse_mode="HTML")
-        return
-        
-    if message.text == "📦 Xem Kho":
-        conn = get_db_connection()
-        avail = conn.execute("SELECT COUNT(*) FROM accounts WHERE status='available'").fetchone()[0]
-        sold = conn.execute("SELECT COUNT(*) FROM accounts WHERE status='sold'").fetchone()[0]
-        conn.close()
-        bot.send_message(message.chat.id, f"📦 <b>XEM KHO HÀNG</b>\n\n✅ Chưa bán: <b>{avail} acc</b>\n💸 Đã bán ra: <b>{sold} acc</b>", parse_mode="HTML")
-        return
-        
-    if message.text == "📷 Đổi QR":
-        user_state[user_id] = "adm_cho_anh_qr"
-        bot.send_message(message.chat.id, "📷 Sếp gửi hình ảnh mã quét QR ngân hàng mới lên đây:")
-        return
-        
-    if message.text == "📢 Broadcast":
-        user_state[user_id] = "adm_cho_broadcast"
-        bot.send_message(message.chat.id, "📢 Nhập nội dung thông báo sếp muốn gửi đi tới toàn bộ thành viên:")
-        return
+    await message.answer(
+        "🔐 <b>ADMIN PANEL</b>", parse_mode="HTML", reply_markup=admin_menu_kb()
+    )
 
-# 👑 LỆNH ẨN ADMIN (GÀI KẾT QUẢ, GIFTCODE, CẤP TIỀN, SET VIP)
-@bot.message_handler(commands=['gaikq'])
-def cmd_gai_kq(message):
-    if message.from_user.id != ADMIN_ID: 
-        return
-    args = message.text.split()
-    if len(args) < 2: 
-        return
-    opt = args[1].lower()
-    if opt in ["tai", "tài"]:
-        CONFIG["force_result"] = "Tài"
-        bot.reply_to(message, "🔮 Thiết lập: Gài phiên tiếp theo chắc chắn ra TÀI!")
-    elif opt in ["xiu", "xỉu"]:
-        CONFIG["force_result"] = "Xỉu"
-        bot.reply_to(message, "🔮 Thiết lập: Gài phiên tiếp theo chắc chắn ra XỈU!")
-    elif opt == "huy":
-        CONFIG["force_result"] = None
-        bot.reply_to(message, "🎲 Đã xóa bỏ lệnh gài kết quả.")
 
-@bot.message_handler(commands=['taoma'])
-def cmd_tao_ma_code(message):
-    if message.from_user.id != ADMIN_ID: 
+@router.message(lambda m: m.text == "🔙 Menu Chính")
+async def back_to_main(message: Message):
+    await message.answer("🏠 Menu Chính", reply_markup=main_menu_kb())
+
+
+@router.message(lambda m: m.text == "📊 Dashboard")
+@admin_only
+async def admin_dashboard(message: Message, is_admin: bool):
+    async with AsyncSessionLocal() as s:
+        total_acc = await get_total_count(s)
+        available_acc = await get_available_count(s)
+        sold_acc = await get_sold_count(s)
+        orders = await get_all_orders(s, 9999)
+        users = await get_all_users(s)
+        deposits = await get_pending_deposits(s)
+    await message.answer(
+        f"📊 <b>DASHBOARD</b>\n\n"
+        f"👥 Tổng user: <b>{len(users)}</b> (banned: {sum(1 for u in users if u.is_banned)})\n"
+        f"📦 Tổng acc: <b>{total_acc}</b>\n"
+        f"✅ Còn lại: <b>{available_acc}</b>\n"
+        f"🔴 Đã bán: <b>{sold_acc}</b>\n"
+        f"🧾 Tổng đơn: <b>{len(orders)}</b>\n"
+        f"💰 Doanh thu: <b>{sum(o.price for o in orders):,} VNĐ</b>\n"
+        f"⏳ Bill chờ duyệt: <b>{len(deposits)}</b>",
+        parse_mode="HTML",
+    )
+
+
+@router.message(lambda m: m.text == "📦 Xem Kho")
+@admin_only
+async def admin_view_stock(message: Message, is_admin: bool):
+    async with AsyncSessionLocal() as s:
+        total = await get_total_count(s)
+        available = await get_available_count(s)
+        sold = await get_sold_count(s)
+    await message.answer(
+        f"📦 <b>Xem Kho</b>\n\n📊 Tổng: <b>{total}</b>\n✅ Còn: <b>{available}</b>\n🔴 Bán: <b>{sold}</b>",
+        parse_mode="HTML",
+    )
+
+
+@router.message(lambda m: m.text == "📊 Thống Kê")
+@admin_only
+async def admin_stats(message: Message, is_admin: bool):
+    async with AsyncSessionLocal() as s:
+        orders = await get_all_orders(s, 9999)
+        users = await get_all_users(s)
+        total_acc = await get_total_count(s)
+        available_acc = await get_available_count(s)
+        sold_acc = await get_sold_count(s)
+    await message.answer(
+        f"📊 <b>Thống Kê</b>\n\n"
+        f"👥 Tổng user: <b>{len(users)}</b>\n"
+        f"📦 Tổng acc: <b>{total_acc}</b>\n"
+        f"✅ Còn lại: <b>{available_acc}</b>\n"
+        f"🔴 Đã bán: <b>{sold_acc}</b>\n"
+        f"🧾 Tổng đơn: <b>{len(orders)}</b>\n"
+        f"💰 Tổng doanh thu: <b>{sum(o.price for o in orders):,} VNĐ</b>",
+        parse_mode="HTML",
+    )
+
+
+@router.message(lambda m: m.text in ("📥 Import TXT",))
+@admin_only
+async def admin_import_start(message: Message, state: FSMContext, is_admin: bool):
+    await message.answer(
+        "📥 Gửi file TXT chứa danh sách acc.\n\nMỗi dòng: <code>username|password</code>",
+        parse_mode="HTML",
+    )
+    await state.set_state(AdminStates.waiting_import_file)
+
+
+@router.message(Command("importacc"))
+@admin_only
+async def cmd_import_acc(message: Message, state: FSMContext, is_admin: bool):
+    await message.answer(
+        "📥 Gửi file TXT chứa danh sách acc.\n\nMỗi dòng: <code>username|password</code>",
+        parse_mode="HTML",
+    )
+    await state.set_state(AdminStates.waiting_import_file)
+
+
+@router.message(AdminStates.waiting_import_file, F.document)
+async def admin_import_file(message: Message, state: FSMContext, bot: Bot):
+    doc = message.document
+    if not doc or not doc.file_name or not doc.file_name.endswith(".txt"):
+        await message.answer("⚠️ Vui lòng gửi file .TXT.")
         return
-    args = message.text.split()
-    if len(args) < 4:
-        bot.reply_to(message, "⚠️ Cú pháp: <code>/taoma [TENM_MA] [số xu] [lượt]</code>", parse_mode="HTML")
+    await state.clear()
+    file = await bot.get_file(doc.file_id)
+    raw = await bot.download_file(file.file_path)
+    content = raw.read().decode("utf-8", errors="ignore")
+    async with AsyncSessionLocal() as s:
+        stats = await import_accounts(s, content.splitlines())
+    await message.answer(
+        f"📥 <b>Import Hoàn Tất</b>\n\n"
+        f"📄 Tổng dòng: <b>{stats['total']}</b>\n"
+        f"✅ Import: <b>{stats['imported']}</b>\n"
+        f"🔁 Trùng: <b>{stats['duplicates']}</b>\n"
+        f"❌ Sai định dạng: <b>{stats['invalid']}</b>",
+        parse_mode="HTML",
+    )
+
+
+@router.message(AdminStates.waiting_import_file)
+async def admin_import_invalid(message: Message):
+    await message.answer("⚠️ Vui lòng gửi file .TXT.")
+
+
+@router.message(lambda m: m.text == "💰 Cộng Tiền")
+@admin_only
+async def admin_add_balance_start(message: Message, state: FSMContext, is_admin: bool):
+    await message.answer("💰 Nhập Telegram ID người dùng cần cộng tiền:")
+    await state.set_state(AdminStates.waiting_add_balance_id)
+
+
+@router.message(AdminStates.waiting_add_balance_id)
+async def admin_add_balance_id(message: Message, state: FSMContext):
+    text = (message.text or "").strip()
+    if not text.lstrip("-").isdigit():
+        await message.answer("⚠️ Telegram ID không hợp lệ.")
         return
-    ma = args[1].upper()
+    await state.update_data(target_id=int(text))
+    await message.answer("💵 Nhập số tiền cần cộng (VNĐ):")
+    await state.set_state(AdminStates.waiting_add_balance_amount)
+
+
+@router.message(AdminStates.waiting_add_balance_amount)
+async def admin_add_balance_amount(message: Message, state: FSMContext):
+    text = (message.text or "").replace(",", "").strip()
+    if not text.isdigit() or int(text) <= 0:
+        await message.answer("⚠️ Số tiền không hợp lệ.")
+        return
+    amount = int(text)
+    data = await state.get_data()
+    target_id = data["target_id"]
+    await state.clear()
+    async with AsyncSessionLocal() as s:
+        user = await adjust_balance_by_telegram_id(s, target_id, amount)
+    if user is None:
+        await message.answer(f"❌ Không tìm thấy user ID: {target_id}")
+        return
+    await message.answer(
+        f"✅ Đã cộng <b>{amount:,} VNĐ</b> cho <b>{user.fullname}</b>\n💰 Số dư mới: <b>{user.balance:,} VNĐ</b>",
+        parse_mode="HTML",
+    )
+
+
+@router.message(lambda m: m.text == "💸 Trừ Tiền")
+@admin_only
+async def admin_subtract_balance_start(
+    message: Message, state: FSMContext, is_admin: bool
+):
+    await message.answer("💸 Nhập Telegram ID người dùng cần trừ tiền:")
+    await state.set_state(AdminStates.waiting_subtract_balance_id)
+
+
+@router.message(AdminStates.waiting_subtract_balance_id)
+async def admin_subtract_balance_id(message: Message, state: FSMContext):
+    text = (message.text or "").strip()
+    if not text.lstrip("-").isdigit():
+        await message.answer("⚠️ Telegram ID không hợp lệ.")
+        return
+    await state.update_data(target_id=int(text))
+    await message.answer("💵 Nhập số tiền cần trừ (VNĐ):")
+    await state.set_state(AdminStates.waiting_subtract_balance_amount)
+
+
+@router.message(AdminStates.waiting_subtract_balance_amount)
+async def admin_subtract_balance_amount(message: Message, state: FSMContext):
+    text = (message.text or "").replace(",", "").strip()
+    if not text.isdigit() or int(text) <= 0:
+        await message.answer("⚠️ Số tiền không hợp lệ.")
+        return
+    amount = int(text)
+    data = await state.get_data()
+    target_id = data["target_id"]
+    await state.clear()
+    async with AsyncSessionLocal() as s:
+        user = await adjust_balance_by_telegram_id(s, target_id, -amount)
+    if user is None:
+        await message.answer(f"❌ Không tìm thấy user ID: {target_id}")
+        return
+    await message.answer(
+        f"✅ Đã trừ <b>{amount:,} VNĐ</b> khỏi <b>{user.fullname}</b>\n💰 Số dư mới: <b>{user.balance:,} VNĐ</b>",
+        parse_mode="HTML",
+    )
+
+
+@router.message(lambda m: m.text == "📷 Đổi QR")
+@admin_only
+async def admin_change_qr_start(message: Message, state: FSMContext, is_admin: bool):
+    await message.answer("📷 Gửi ảnh QR mới:")
+    await state.set_state(AdminStates.waiting_qr)
+
+
+@router.message(AdminStates.waiting_qr, F.photo)
+async def admin_receive_qr(message: Message, state: FSMContext, bot: Bot):
+    photo = message.photo[-1]
+    file = await bot.get_file(photo.file_id)
+    raw = await bot.download_file(file.file_path)
+    await save_qr_image(raw.read())
+    await state.clear()
+    await message.answer("✅ Ảnh QR đã được cập nhật!")
+
+
+@router.message(AdminStates.waiting_qr)
+async def admin_qr_invalid(message: Message):
+    await message.answer("⚠️ Vui lòng gửi ảnh (photo).")
+
+
+@router.message(lambda m: m.text == "📥 Bill Chờ")
+@admin_only
+async def admin_pending_bills(message: Message, is_admin: bool):
+    async with AsyncSessionLocal() as s:
+        deposits = await get_pending_deposits(s)
+    if not deposits:
+        await message.answer("✅ Không có yêu cầu nạp tiền nào đang chờ.")
+        return
+    lines = [f"📥 <b>Bill đang chờ duyệt ({len(deposits)})</b>\n"]
+    for d in deposits:
+        uname = f"@{d.user.username}" if d.user and d.user.username else "N/A"
+        name = d.user.fullname if d.user else "N/A"
+        created = d.created_at.strftime("%d/%m/%Y %H:%M") if d.created_at else "N/A"
+        lines.append(
+            f"🧾 #{d.id} — {name} ({uname})\n   💵 {d.amount:,} VNĐ — {created}"
+        )
+    await message.answer("\n".join(lines), parse_mode="HTML")
+
+
+@router.message(lambda m: m.text == "📢 Broadcast")
+@admin_only
+async def admin_broadcast_start(message: Message, state: FSMContext, is_admin: bool):
+    await message.answer("📢 Nhập nội dung tin nhắn broadcast:")
+    await state.set_state(AdminStates.waiting_broadcast_text)
+
+
+@router.message(AdminStates.waiting_broadcast_text)
+async def admin_broadcast_send(message: Message, state: FSMContext, bot: Bot):
+    text = message.text or ""
+    if not text:
+        await message.answer("⚠️ Nội dung trống.")
+        return
+    await state.clear()
+    async with AsyncSessionLocal() as s:
+        users = await get_all_users(s)
+    sent = failed = 0
+    for user in users:
+        if user.is_banned:
+            continue
+        try:
+            await bot.send_message(user.telegram_id, text, parse_mode="HTML")
+            sent += 1
+        except Exception:
+            failed += 1
+    await message.answer(
+        f"📢 <b>Broadcast hoàn tất</b>\n\n✅ Gửi thành công: <b>{sent}</b>\n❌ Thất bại: <b>{failed}</b>",
+        parse_mode="HTML",
+    )
+
+
+@router.message(lambda m: m.text == "🚫 Ban User")
+@admin_only
+async def admin_ban_start(message: Message, state: FSMContext, is_admin: bool):
+    await message.answer("🚫 Nhập Telegram ID cần ban:")
+    await state.set_state(AdminStates.waiting_ban_id)
+
+
+@router.message(AdminStates.waiting_ban_id)
+async def admin_ban_execute(message: Message, state: FSMContext):
+    text = (message.text or "").strip()
+    if not text.lstrip("-").isdigit():
+        await message.answer("⚠️ Telegram ID không hợp lệ.")
+        return
+    await state.clear()
+    async with AsyncSessionLocal() as s:
+        ok = await ban_user(s, int(text))
+    await message.answer(
+        f"✅ Đã ban <code>{text}</code>."
+        if ok
+        else f"❌ Không tìm thấy user <code>{text}</code>.",
+        parse_mode="HTML",
+    )
+
+
+@router.message(lambda m: m.text == "✅ Unban User")
+@admin_only
+async def admin_unban_start(message: Message, state: FSMContext, is_admin: bool):
+    await message.answer("✅ Nhập Telegram ID cần unban:")
+    await state.set_state(AdminStates.waiting_unban_id)
+
+
+@router.message(AdminStates.waiting_unban_id)
+async def admin_unban_execute(message: Message, state: FSMContext):
+    text = (message.text or "").strip()
+    if not text.lstrip("-").isdigit():
+        await message.answer("⚠️ Telegram ID không hợp lệ.")
+        return
+    await state.clear()
+    async with AsyncSessionLocal() as s:
+        ok = await unban_user(s, int(text))
+    await message.answer(
+        f"✅ Đã unban <code>{text}</code>."
+        if ok
+        else f"❌ Không tìm thấy user <code>{text}</code>.",
+        parse_mode="HTML",
+    )
+
+
+@router.message(lambda m: m.text == "🗑 Xóa Account")
+@admin_only
+async def admin_delete_acc_start(message: Message, state: FSMContext, is_admin: bool):
+    await message.answer("🗑 Nhập username acc cần xóa:")
+    await state.set_state(AdminStates.waiting_delete_username)
+
+
+@router.message(AdminStates.waiting_delete_username)
+async def admin_delete_acc_execute(message: Message, state: FSMContext):
+    username = (message.text or "").strip()
+    if not username:
+        await message.answer("⚠️ Username không hợp lệ.")
+        return
+    await state.clear()
+    async with AsyncSessionLocal() as s:
+        ok = await delete_account_by_username(s, username)
+    await message.answer(
+        f"✅ Đã xóa <code>{username}</code>."
+        if ok
+        else f"❌ Không tìm thấy acc <code>{username}</code>.",
+        parse_mode="HTML",
+    )
+
+
+@router.message(lambda m: m.text == "📤 Export Chưa Bán")
+@admin_only
+async def admin_export_unsold(message: Message, is_admin: bool):
+    async with AsyncSessionLocal() as s:
+        accounts = await get_unsold_accounts(s)
+    if not accounts:
+        await message.answer("📦 Kho không có acc nào chưa bán.")
+        return
+    lines = [f"{a.username}|{a.password}" for a in accounts]
+    fp = await save_export_file(lines, "unsold")
+    await message.answer_document(
+        FSInputFile(fp),
+        caption=f"📤 <b>Export Acc Chưa Bán</b>\n📊 Tổng: <b>{len(lines)}</b> acc",
+        parse_mode="HTML",
+    )
+
+
+@router.message(lambda m: m.text == "📤 Export Đã Bán")
+@admin_only
+async def admin_export_sold(message: Message, is_admin: bool):
+    async with AsyncSessionLocal() as s:
+        accounts = await get_sold_accounts(s)
+    if not accounts:
+        await message.answer("📦 Chưa có acc nào được bán.")
+        return
+    lines = [f"{a.username}|{a.password}" for a in accounts]
+    fp = await save_export_file(lines, "sold")
+    await message.answer_document(
+        FSInputFile(fp),
+        caption=f"📤 <b>Export Acc Đã Bán</b>\n📊 Tổng: <b>{len(lines)}</b> acc",
+        parse_mode="HTML",
+    )
+
+
+# ── Hàm chạy Web Server mồi cho Render ──────────────────────────────────────────
+
+
+async def handle_web(request):
+    return web.Response(text="Bot đang chạy mượt mà!")
+
+
+async def start_web_server():
+    app = web.Application()
+    app.router.add_get("/", handle_web)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    port = int(os.environ.get("PORT", 8080))  # Lấy cổng Render cấp
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+    logger.info(f"✅ Web Server mồi đang chạy tại port {port}")
+
+
+# ── Main ──────────────────────────────────────────────────────────────────────
+
+
+async def main():
+    if not BOT_TOKEN or BOT_TOKEN == "NHAP_BOT_TOKEN_CUA_BAN_VAO_DAY":
+        print(
+            "❌ Chưa nhập BOT_TOKEN! Mở file bot_single.py và sửa dòng BOT_TOKEN ở đầu file."
+        )
+        sys.exit(1)
+
+    await init_db()
+
+    # Bắt đầu chạy song song Web Server cùng lúc với Bot Telegram
+    await start_web_server()
+
+    bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+    dp = Dispatcher(storage=MemoryStorage())
+    dp.message.middleware(AuthMiddleware())
+    dp.callback_query.middleware(AuthMiddleware())
+    dp.include_router(router)
+
+    logger.info("✅ Bot đang chạy...")
     try:
-        xu = int(args[2])
-        luot = int(args[3])
-    except ValueError: 
-        return
-    
-    conn = get_db_connection()
-    try:
-        conn.execute("INSERT INTO codes (code, xu, luot) VALUES (?, ?, ?)", (ma, xu, luot))
-        conn.commit()
-        bot.reply_to(message, f"✅ Đã tạo thành công mã Code: <b>{ma}</b>\n🎁 Trị giá: {xu:,} xu | Số lượt nhập: {luot} lượt", parse_mode="HTML")
-    except sqlite3.IntegrityError:
-        bot.reply_to(message, "❌ Mã này đã tồn tại rồi sếp!")
-    conn.close()
+        await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
+    finally:
+        await bot.session.close()
 
-@bot.message_handler(commands=['congbong'])
-def cmd_cong_bong_xu(message):
-    if message.from_user.id != ADMIN_ID: 
-        return
-    args = message.text.split()
-    if len(args) < 3: 
-        return
-    try:
-        tg_id = int(args[1])
-        amount = int(args[2])
-        update_user_xu(tg_id, amount)
-        bot.reply_to(message, f"👑 Đã cộng trực tiếp +<b>{amount:,} điểm</b> cho tài khoản ID <code>{tg_id}</code>.", parse_mode="HTML")
-        try: 
-            bot.send_message(tg_id, f"🎁 Tài khoản của bạn được Admin cộng thưởng trực tiếp: +<b>{amount:,} xu/điểm</b>!", parse_mode="HTML")
-        except Exception: 
-            pass
-    except Exception: 
-        pass
 
-@bot.message_handler(commands=['setvip'])
-def cmd_set_vip_day(message):
-    if message.from_user.id != ADMIN_ID: 
-        return
-    args = message.text.split()
-    if len(args) < 3: 
-        return
-    try:
-        tg_id = int(args[1])
-        days = int(args[2])
-        exp = (datetime.datetime.now() + datetime.timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
-        conn = get_db_connection()
-        conn.execute("UPDATE users SET vip_until = ? WHERE telegram_id = ?", (exp, tg_id))
-        conn.commit()
-        conn.close()
-        bot.reply_to(message, f"👑 Đã kích hoạt VIP thành công cho ID <code>{tg_id}</code> thời hạn <b>{days} ngày</b>.", parse_mode="HTML")
-    except Exception: 
-        pass
-
-@bot.message_handler(commands=['myid'])
-def cmd_show_my_id(message):
-    bot.reply_to(message, f"🪪 ID Telegram của bạn là: <code>{message.from_user.id}</code>", parse_mode="HTML")
-
-# ════════════════════════════════════════════════════════
-# 🎛 XỬ LÝ SỰ KIỆN CALLBACK QUERY (INLINE KEYBOARDS)
-# ════════════════════════════════════════════════════════
-@bot.callback_query_handler(func=lambda call: True)
-def handling_callback_queries(call):
-    user_id = call.from_user.id
-    
-    # 1. Mua VIP tự động bằng xu ví chính
-    if call.data.startswith("buy_vip_"):
-        gói = call.data.split("_")[-1]
-        if gói == "week":
-            cost = VIP_WEEK_PRICE
-            days = 7
-        else:
-            cost = VIP_MONTH_PRICE
-            days = 30
-        
-        user = get_user(user_id)
-        if user["xu"] < cost:
-            bot.answer_callback_query(call.id, "❌ Số dư điểm ví không đủ để kích hoạt gói VIP này!", show_alert=True)
-            return
-            
-        exp = (datetime.datetime.now() + datetime.timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
-        conn = get_db_connection()
-        conn.execute("UPDATE users SET xu = xu - ?, vip_until = ? WHERE telegram_id = ?", (cost, exp, user_id))
-        conn.commit()
-        conn.close()
-            
-        bot.edit_message_text(f"🎉 Bạn đã mua thành công gói thành viên VIP! Thời hạn sử dụng đến ngày: <b>{exp}</b>", call.message.chat.id, call.message.message_id, parse_mode="HTML")
-        bot.answer_callback_query(call.id)
-        return
-
-    # 2. Duyệt hóa đơn nạp tiền của Admin
-    if call.data.startswith("approve_") or call.data.startswith("reject_"):
-        if user_id != ADMIN_ID: 
-            return
-        parts = call.data.split("_")
-        act = parts[0]
-        dep_id = parts[1]
-        
-        conn = get_db_connection()
-        dep = conn.execute("SELECT * FROM deposits WHERE id=?", (dep_id,)).fetchone()
-        if dep and dep['status'] == 'pending':
-            if act == "approve":
-                conn.execute("UPDATE deposits SET status='approved' WHERE id=?", (dep_id,))
-                conn.execute("UPDATE users SET xu = xu + ? WHERE telegram_id = ?", (dep['amount'], dep['telegram_id']))
-                conn.commit()
-                bot.edit_message_text(f"✅ Đã DUYỆT nạp thành công hóa đơn #{dep_id}.", call.message.chat.id, call.message.message_id)
-                try: 
-                    bot.send_message(dep['telegram_id'], f"✅ Giao dịch nạp tiền thành công! Bạn được cộng +<b>{dep['amount']:,} điểm</b> vào tài khoản.", parse_mode="HTML")
-                except Exception: 
-                    pass
-            else:
-                conn.execute("UPDATE deposits SET status='rejected' WHERE id=?", (dep_id,))
-                conn.commit()
-                bot.edit_message_text(f"❌ Đã TỪ CHỐI nạp hóa đơn #{dep_id}.", call.message.chat.id, call.message.message_id)
-        conn.close()
-        bot.answer_callback_query(call.id)
-        return
-
-# ════════════════════════════════════════════════════════
-# 🌐 WEB SERVER MỒI CHỐNG KHÓA / SLEEP TRÊN RENDER
-# ════════════════════════════════════════════════════════
-app = Flask(__name__)
-
-@app.route('/')
-def home():
-    return "Bot Lien Quân & Tài Xỉu Dynamic is running perfectly!", 200
-
-def run_web_server():
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host="0.0.0.0", port=port)
-
-# Kích hoạt mở luồng chạy Web Server mồi độc lập
-threading.Thread(target=run_web_server, daemon=True).start()
-
-# 🚀 KHỞI ĐỘNG HỆ THỐNG ĐỌC ENGINE POLLING
-print("🤖 Hệ thống Bot Tổng hợp tường minh (SQLite + Web Server) đã sẵn sàng chạy!")
-bot.infinity_polling()
+if __name__ == "__main__":
+    asyncio.run(main())
