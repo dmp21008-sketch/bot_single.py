@@ -65,7 +65,8 @@ UPLOADS_DIR = os.path.join(BASE_DIR, "uploads")  #[span_12](start_span)[span_12]
 EXPORTS_DIR = os.path.join(BASE_DIR, "exports")  #[span_13](start_span)[span_13](end_span)
 LOGS_DIR = os.path.join(BASE_DIR, "logs")  #[span_14](start_span)[span_14](end_span)
 QR_IMAGE_PATH = os.path.join(UPLOADS_DIR, "qr_current.jpg")  #[span_15](start_span)[span_15](end_span)
-DATABASE_URL = f"sqlite+aiosqlite:///{os.path.join(BASE_DIR, 'database.sqlite')}"  #[span_16](start_span)[span_16](end_span)
+DATABASE_URL = "postgresql+asyncpg://neondb_owner:npg_LF6COm8Ruikq@ep-sweet-moon-auyjhn8e-pooler.c-10.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+  #[span_16](start_span)[span_16](end_span)
 
 MENU_BUTTONS = {
     "🏠 Trang Chủ", "🛒 Mua Acc", "💳 Nạp Tiền", "👤 Tài Khoản", "📦 Đơn Hàng", "☎ Hỗ Trợ",
