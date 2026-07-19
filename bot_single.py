@@ -17,7 +17,8 @@ from flask import Flask
 # =======================================================
 # ⚙️ CẤU HÌNH HỆ THỐNG
 # =======================================================
-BOT_TOKEN = os.environ.get("8374524579:AAE2pvVgQqOFnEN2hnhhfRUyopi1B8Dhxcc")
+BOT_TOKEN = "8374524579:AAE2pvVgQqDFnEN2hnhhfRUyopi1B8Dhxcc"
+
 ADMIN_ID = 7936179657  # ID Telegram của Admin chủ shop
 
 ACCOUNT_PRICE = 200      # Giá VNĐ/Điểm cho 1 acc lẻ
