@@ -280,20 +280,40 @@ async def import_accounts(session, lines):
     existing_unames = set(r_all.scalars().all())
 
     for raw in lines:
-        line = raw.strip()  #[span_112](start_span)[span_112](end_span)
-        if not line: continue  #[span_113](start_span)[span_113](end_span)
-        stats["total"] += 1  #[span_114](start_span)[span_114](end_span)
-        if "|" in line: parts = line.split("|", 1)  #[span_115](start_span)[span_115](end_span)
-        elif ":" in line: parts = line.split(":", 1)  #[span_116](start_span)[span_116](end_span)
-        else: stats["invalid"] += 1; continue  #[span_117](start_span)[span_117](end_span)
-        uname, pwd = parts[0].strip(), parts[1].strip()  #[span_118](start_span)[span_118](end_span)
-        if not uname or not pwd: stats["invalid"] += 1; continue  #[span_119](start_span)[span_119](end_span)
-        if uname in existing_unames: stats["duplicates"] += 1; continue  #[span_120](start_span)[span_120](end_span)
-        session.add(Account(username=uname, password=pwd, status=AccountStatus.available))  #[span_121](start_span)[span_121](end_span)
-        existing_unames.add(uname)
-        stats["imported"] += 1  #[span_122](start_span)[span_122](end_span)
-    await session.commit()  #[span_123](start_span)[span_123](end_span)
-    return stats
+    
+    # Bước 1: Tách tài khoản và mật khẩu trước dấu gạch đứng đầu tiên
+    parts = raw.split(" | ")
+    account_pass = parts[0].split(":")
+    username = account_pass[0].strip()
+    password = account_pass[1].strip() if len(account_pass) > 1 else ""
+    
+    # Bước 2: Tạo một danh sách từ điển để bốc các giá trị sau dấu "="
+    data_map = {}
+    for part in parts[1:]:
+        if "=" in part:
+            key, val = part.split("=", 1)
+            data_map[key.strip().lower()] = val.strip()
+
+    # Bước 3: Đưa dữ liệu chuẩn hóa vào Model Database của bác
+    # Ép kiểu dữ liệu về dạng chữ (String) hoặc Số (Integer) tương ứng để Neon không bắt lỗi
+    new_account = Account(
+        username=username,
+        password=password,
+        uid=int(data_map.get("uid", 0)) if data_map.get("uid", "").isdigit() else None,
+        region=data_map.get("region"),
+        country=data_map.get("country"),
+        so=data_map.get("sò"),
+        email=data_map.get("email"),
+        sdt=data_map.get("sđt"),
+        fb=data_map.get("fb"),
+        ban=data_map.get("ban"),
+        rank=data_map.get("rank"),
+        skin=data_map.get("skin"),
+        tuong=data_map.get("tướng"),
+        tinh_trang=data_map.get("tình trạng")
+    )
+    # Lệnh session.add(new_account) phía dưới của bác...
+
 
 async def get_unsold_accounts(session):
     r = await session.execute(select(Account).where(Account.status == AccountStatus.available)); return list(r.scalars().all())  #[span_124](start_span)[span_124](end_span)
