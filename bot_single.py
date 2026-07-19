@@ -119,11 +119,11 @@ class User(Base):
     telegram_id: Mapped[int] = mapped_column(BigInteger, unique=True, nullable=False, index=True)  
     username: Mapped[str | None] = mapped_column(String(255), nullable=True)  
     fullname: Mapped[str] = mapped_column(String(255), nullable=False, default="")  
-    balance: Mapped[int] = mapped_column(Integer, nullable=False, default=0)  # Ví VNĐ mua acc
-    xu: Mapped[int] = mapped_column(Integer, nullable=False, default=100)  # Ví Xu tài xỉu
-    last_diemdanh: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)  # Chống spam điểm danh
-    referred_by: Mapped[int | None] = mapped_column(BigInteger, nullable=True)  # ID người mời
-    total_ref: Mapped[int] = mapped_column(Integer, nullable=False, default=0)  # Tổng số người đã mời
+    balance: Mapped[int] = mapped_column(Integer, nullable=False, default=0)  
+    xu: Mapped[int] = mapped_column(Integer, nullable=False, default=100)  
+    last_diemdanh: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)  
+    referred_by: Mapped[int | None] = mapped_column(BigInteger, nullable=True)  
+    total_ref: Mapped[int] = mapped_column(Integer, nullable=False, default=0)  
     is_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)  
     is_banned: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)  
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())  
@@ -131,7 +131,8 @@ class User(Base):
     deposits: Mapped[list["Deposit"]] = relationship("Deposit", back_populates="user")  
 
 class Account(Base):  
-    __tablename__ = "accounts"
+    # Đổi sang v3 để Neon tự sinh bảng mới đồng nhất cấu trúc dữ liệu gọn nhẹ
+    __tablename__ = "accounts_v3"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)  
     username: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)  
     password: Mapped[str] = mapped_column(String(255), nullable=False)  
@@ -140,20 +141,6 @@ class Account(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())  
     sold_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)  
     order: Mapped["Order|None"] = relationship("Order", back_populates="accounts")  
-    
-    # Các cột bổ sung phục vụ cho chuẩn hóa Import
-    uid: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
-    region: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    country: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    so: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    email: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    sdt: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    fb: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    ban: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    rank: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    skin: Mapped[str | None] = mapped_column(Text, nullable=True)
-    tuong: Mapped[str | None] = mapped_column(Text, nullable=True)
-    tinh_trang: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
 class Order(Base):  
     __tablename__ = "orders"
@@ -285,7 +272,7 @@ async def mark_accounts_sold(session, accounts, order_id):
         acc.sold_at = now  
     await session.commit()  
 
-# ── Hàm Import Đã Được Sửa Lỗi Thụt Lề Hoàn Chỉnh ──────────────────────────────
+# ── Hàm Import Đã Đồng Bộ Hóa Cấu Trúc Nhẹ Nhàng Xanh Chín ─────────────────────
 async def import_accounts(session, lines):
     stats = {"total": 0, "imported": 0, "duplicates": 0, "invalid": 0}
     
@@ -293,50 +280,34 @@ async def import_accounts(session, lines):
     existing_unames = set(r_all.scalars().all())
     
     for raw in lines:
-        raw = raw.strip()
-        if not raw:
+        line = raw.strip()
+        if not line:
             continue
         stats["total"] += 1
-            
-        parts = raw.split(" | ")
-        account_pass = parts[0].split(":")
         
-        if len(account_pass) < 2:
+        if "|" in line:
+            parts = line.split("|", 1)
+        elif ":" in line:
+            parts = line.split(":", 1)
+        else:
             stats["invalid"] += 1
             continue
             
-        username = account_pass[0].strip()
-        password = account_pass[1].strip()
+        uname = parts[0].strip()
+        pwd = parts[1].strip()
         
-        if username in existing_unames:
+        if not uname or not pwd:
+            stats["invalid"] += 1
+            continue
+            
+        if uname in existing_unames:
             stats["duplicates"] += 1
             continue
-        
-        data_map = {}
-        for part in parts[1:]:
-            if "=" in part:
-                key, val = part.split("=", 1)
-                data_map[key.strip().lower()] = val.strip()
-
-        new_account = Account(
-            username=username,
-            password=password,
-            uid=int(data_map.get("uid", 0)) if data_map.get("uid", "").isdigit() else None,
-            region=data_map.get("region"),
-            country=data_map.get("country"),
-            so=data_map.get("sò"),
-            email=data_map.get("email"),
-            sdt=data_map.get("sđt"),
-            fb=data_map.get("fb"),
-            ban=data_map.get("ban"),
-            rank=data_map.get("rank"),
-            skin=data_map.get("skin"),
-            tuong=data_map.get("tướng"),
-            tinh_trang=data_map.get("tình trạng")
+            
+        session.add(
+            Account(username=uname, password=pwd, status=AccountStatus.available)
         )
-        
-        session.add(new_account)
-        existing_unames.add(username)
+        existing_unames.add(uname)
         stats["imported"] += 1
 
     await session.commit()
@@ -801,7 +772,7 @@ async def deposit_bill_photo(message: Message, state: FSMContext, bot: Bot, db_u
 async def deposit_bill_invalid(message: Message):
     await message.answer("⚠️ Vui lòng gửi hình ảnh hóa đơn giao dịch.")  
 
-@router.message(F.data.startswith("approve_deposit:"))
+@router.callback_query(F.data.startswith("approve_deposit:"))
 async def cb_approve_deposit(callback: CallbackQuery, bot: Bot, is_admin: bool, db_session):
     if not is_admin: await callback.answer("❌ Bạn không có quyền.", show_alert=True); return  
     deposit_id = int(callback.data.split(":")[1])  
@@ -816,7 +787,7 @@ async def cb_approve_deposit(callback: CallbackQuery, bot: Bot, is_admin: bool, 
         except Exception: pass
     await callback.answer("✅ Hoàn tất!")  
 
-@router.message(F.data.startswith("reject_deposit:"))
+@router.callback_query(F.data.startswith("reject_deposit:"))
 async def cb_reject_deposit(callback: CallbackQuery, bot: Bot, is_admin: bool, db_session):
     if not is_admin: await callback.answer("❌ Bạn không có quyền.", show_alert=True); return  
     deposit_id = int(callback.data.split(":")[1])  
@@ -1074,7 +1045,7 @@ async def cmd_top_rich(message: Message, db_session):
         text += f"{i}. <b>{u.fullname}</b> — {u.xu:,} xu\n"
     await message.answer(text, parse_mode="HTML")
 
-# ── Hệ Thống Giftcode Lưu Trữ SQLite ──────────────────────────────────────────
+# ── Hệ Thống Giftcode Lưu Trữ ─────────────────────────────────────────────────
 @router.message(lambda m: m.text == "🎁 Nhập Mã")
 async def giftcode_start(message: Message, state: FSMContext):
     await state.clear()
@@ -1174,7 +1145,6 @@ async def admin_stats(message: Message, is_admin: bool, db_session):
 @admin_only
 async def admin_import_start(message: Message, state: FSMContext, is_admin: bool):
     await message.answer("📥 Vui lòng gửi file `.TXT` chứa tài khoản.\n\nĐịnh dạng mỗi dòng: <code>username|password</code>", parse_mode="HTML")  
-    await state.set_state(AdminStates.waiting_import_file)  
 
 @router.message(AdminStates.waiting_import_file, F.document)
 async def admin_import_file(message: Message, state: FSMContext, bot: Bot, db_session):
