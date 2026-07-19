@@ -3,7 +3,7 @@
 #  Cài thư viện: pip install aiogram==3.13.1 sqlalchemy==2.0.36 aiosqlite==0.20.0 aiofiles==24.1.0 aiohttp
 # ═══════════════════════════════════════════════════════════════
 
-BOT_TOKEN = "8374524579:AAE2pvVgQqOFnEN2hnhhfRUyopi1B8Dhxcc"  #[span_4](start_span)[span_4](end_span)
+BOT_TOKEN = "8374524579:AAF6CpmmHi0RKYtQ5dJ0bIw9e_wBonjF1nY"  #[span_4](start_span)[span_4](end_span)
 ADMIN_IDS = [7936179657]  # ID Telegram Admin[span_5](start_span)[span_5](end_span)
 
 import asyncio
