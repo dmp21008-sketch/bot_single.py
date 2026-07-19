@@ -278,8 +278,7 @@ async def import_accounts(session, lines):
     # Tối ưu hóa quét bộ nhớ set tránh treo database
     r_all = await session.execute(select(Account.username))
     existing_unames = set(r_all.scalars().all())
-
-        for raw in lines:
+    for raw in lines:
     
     # Bước 1: Tách tài khoản và mật khẩu trước dấu gạch đứng đầu tiên
     parts = raw.split(" | ")
