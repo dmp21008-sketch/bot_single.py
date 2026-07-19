@@ -8,3 +8,5 @@ python-dotenv
 aiofiles
 aiosqlite
 requests
+pyTelegramBotAPI
+Flask
