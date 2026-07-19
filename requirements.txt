@@ -8,5 +8,3 @@ python-dotenv
 aiofiles
 aiosqlite
 requests
-pytelegrambotapi
-flask
