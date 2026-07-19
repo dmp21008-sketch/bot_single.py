@@ -69,7 +69,7 @@ QR_IMAGE_PATH = os.path.join(UPLOADS_DIR, "qr_current.jpg")
 DATABASE_URL = "postgresql+asyncpg://neondb_owner:npg_LF6COm8Ruikq@ep-sweet-moon-auyjhn8e-pooler.c-10.us-east-1.aws.neon.tech/neondb?ssl=require"
 
 MENU_BUTTONS = {
-    "🏠 Trang Chủ", "🛒 Mua Acc", "💳 Nạp Tiền", "👤 Tài Khoản", "📦 Đơn Hàng", "☎ Hỗ Trợ",
+    "🟢 Bot Đang Chạy 24/7", "🏠 Trang Chủ", "🛒 Mua Acc", "💳 Nạp Tiền", "👤 Tài Khoản", "📦 Đơn Hàng", "☎ Hỗ Trợ",
     "🎲 Chơi Tài Xỉu", "🎁 Điểm Danh", "🔗 Giới Thiệu", "🏆 Top Đại Gia", "🎁 Nhập Mã", "🪙 Đổi Tiền",
     "📊 Dashboard", "📥 Import TXT", "📦 Xem Kho", "📊 Thống Kê", "💰 Cộng Tiền", "💸 Trừ Tiền",
     "🪙 Cộng Xu", "🪙 Trừ Xu", "📷 Đổi QR", "📥 Bill Chờ", "📢 Broadcast", "🚫 Ban User", 
@@ -131,7 +131,6 @@ class User(Base):
     deposits: Mapped[list["Deposit"]] = relationship("Deposit", back_populates="user")  
 
 class Account(Base):  
-    # Đổi sang v3 để Neon tự sinh bảng mới đồng nhất cấu trúc dữ liệu gọn nhẹ
     __tablename__ = "accounts_v3"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)  
     username: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)  
@@ -419,6 +418,7 @@ def main_menu_kb():
     b.row(KeyboardButton(text="🔗 Giới Thiệu"), KeyboardButton(text="🏆 Top Đại Gia"))
     b.row(KeyboardButton(text="🪙 Đổi Tiền"), KeyboardButton(text="🎁 Nhập Mã"))
     b.row(KeyboardButton(text="📦 Đơn Hàng"), KeyboardButton(text="☎ Hỗ Trợ"))  
+    b.row(KeyboardButton(text="🟢 Bot Đang Chạy 24/7"))
     return b.as_markup(resize_keyboard=True)  
 
 def cancel_kb():
@@ -453,7 +453,7 @@ def admin_menu_kb():
     b.row(KeyboardButton(text="📢 Broadcast"), KeyboardButton(text="🚫 Ban User"))  
     b.row(KeyboardButton(text="✅ Unban User"), KeyboardButton(text="🗑 Xóa Account"))  
     b.row(KeyboardButton(text="📤 Export Chưa Bán"), KeyboardButton(text="📤 Export Đã Bán"))  
-    b.row(KeyboardButton(text="🔙 Menu Chính"))  
+    b.row(KeyboardButton(text="🔙 Menu Chính"), KeyboardButton(text="🟢 Bot Đang Chạy 24/7"))  
     return b.as_markup(resize_keyboard=True)  
 
 # ── Middleware ────────────────────────────────────────────────────────────────
@@ -521,6 +521,11 @@ def admin_only(func):
 
 # ── Router ────────────────────────────────────────────────────────────────────
 router = Router()  
+
+# ── Xử lý nút Bot Đang Chạy ───────────────────────────────────────────────────
+@router.message(lambda m: m.text == "🟢 Bot Đang Chạy 24/7")
+async def bot_status_click(message: Message):
+    await message.answer("⚡ <b>Hệ thống trực tuyến!</b>\n Bot vẫn đang vận hành ổn định, xanh chín 24/7 trên máy chủ Render.", parse_mode="HTML")
 
 # ── /start & home ─────────────────────────────────────────────────────────────
 @router.message(CommandStart())
@@ -797,7 +802,7 @@ async def cb_reject_deposit(callback: CallbackQuery, bot: Bot, is_admin: bool, d
     await callback.message.edit_reply_markup(reply_markup=None)  
     await callback.message.reply(f"❌ Đã từ chối đơn nạp #{deposit_id}", parse_mode="HTML")  
     if user_tg_id:
-        try: await bot.send_message(user_tg_id, f"❌ <b>Đơn nạp tiền bị từ chối!</b>\n\n💵 Số tiền: <b>{deposit.amount:,} VNĐ</b>\nVui lòng kiểm tra lại hình ảnh hóa đơn.", parse_mode="HTML")  
+        try: await bot.send_message(user_tg_id, f"❌ <b>Đơn nạp tiền bị từ chối!</b>\n\n💵 Số tiền: <b>{deposit.amount:,} VNĐ</b>\Vui lòng kiểm tra lại hình ảnh hóa đơn.", parse_mode="HTML")  
         except Exception: pass
     await callback.answer("❌ Đã từ chối!")  
 
@@ -1145,6 +1150,7 @@ async def admin_stats(message: Message, is_admin: bool, db_session):
 @admin_only
 async def admin_import_start(message: Message, state: FSMContext, is_admin: bool):
     await message.answer("📥 Vui lòng gửi file `.TXT` chứa tài khoản.\n\nĐịnh dạng mỗi dòng: <code>username|password</code>", parse_mode="HTML")  
+    await state.set_state(AdminStates.waiting_import_file)
 
 @router.message(AdminStates.waiting_import_file, F.document)
 async def admin_import_file(message: Message, state: FSMContext, bot: Bot, db_session):
